@@ -2,7 +2,6 @@ import os
 import json
 import sqlite3
 import datetime
-import requests
 from flask import Flask, render_template_string, request, jsonify
 from flask_socketio import SocketIO, emit, join_room, leave_room
 
@@ -16,6 +15,9 @@ except ImportError:
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secreto123!'
+
+# === CAMBIO IMPORTANTE PARA PYTHON 3.14.3 ===
+# Usamos 'threading' como async_mode para evitar gevent
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 # Variable global en memoria para controlar si el admin decide hacerse visible
@@ -668,10 +670,9 @@ def broadcast_user_list_all_rooms():
         socketio.emit('update_users', lista_sala, to=sala)
 
 # ==========================================
-# 4. PLANTILLA HTML DE LA INTERFAZ - VERSIÓN COMPLETA ORIGINAL
+# 4. PLANTILLA HTML DE LA INTERFAZ (COMPLETA)
 # ==========================================
-HTML_TEMPLATE = """
-<!DOCTYPE html>
+HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -1956,12 +1957,4 @@ HTML_TEMPLATE = """
 """
 
 if __name__ == '__main__':
-    print("\n" + "="*50)
-    print("🚀 WEBCHAT INICIADO - VERSIÓN COMPLETA")
-    print("="*50)
-    print("📌 Servidor: http://localhost:8550")
-    print("👤 Admin: Administrador")
-    print("🔑 Contraseña: 1234")
-    print("="*50 + "\n")
-    
     socketio.run(app, host='0.0.0.0', port=8550, debug=True)
