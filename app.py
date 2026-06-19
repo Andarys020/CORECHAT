@@ -16,6 +16,10 @@ except ImportError:
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secreto123!'
 
+# ✅ Aumentar límite de tamaño de solicitud (hasta 10MB para imágenes)
+app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10 MB
+app.config['MAX_IMAGE_SIZE'] = 2 * 1024 * 1024  # 2 MB máximo para imágenes
+
 # === CONFIGURACIÓN MEJORADA PARA RENDER Y PYTHON 3.14.3 ===
 # Detectar si estamos en entorno de producción (Render)
 if 'GUNICORN_CMD_ARGS' in os.environ or 'RENDER' in os.environ:
@@ -30,7 +34,8 @@ if 'GUNICORN_CMD_ARGS' in os.environ or 'RENDER' in os.environ:
         ping_interval=25,
         transports=['websocket', 'polling'],
         allow_upgrades=True,
-        always_connect=True
+        always_connect=True,
+        max_http_buffer_size=10 * 1024 * 1024  # 10 MB para buffer de SocketIO
     )
 else:
     # Modo desarrollo local
@@ -42,7 +47,8 @@ else:
         ping_interval=25,
         transports=['websocket', 'polling'],
         allow_upgrades=True,
-        always_connect=True
+        always_connect=True,
+        max_http_buffer_size=10 * 1024 * 1024
     )
 
 # Variable global en memoria para controlar si el admin decide hacerse visible
@@ -163,16 +169,34 @@ def init_db():
             )
         """, commit=True)
         
-        columnas_usuarios = ["genero TEXT NOT NULL DEFAULT 'hombre'", "avatar TEXT DEFAULT ''", "ban_expira TEXT", "mute_expira TEXT"]
-        for col in columnas_usuarios:
-            try: db_query(f"ALTER TABLE usuarios ADD COLUMN {col}", commit=True)
-            except: pass
+        # Verificar y agregar columnas faltantes (sin errores)
+        if not es_postgres:
+            check = db_query("PRAGMA table_info(usuarios)", fetchall=True)
+            columnas_existentes = [row[1] for row in check] if check else []
             
+            columnas_para_agregar = [
+                ("genero", "TEXT NOT NULL DEFAULT 'hombre'"),
+                ("avatar", "TEXT DEFAULT ''"),
+                ("ban_expira", "TEXT"),
+                ("mute_expira", "TEXT")
+            ]
+            
+            for col, tipo in columnas_para_agregar:
+                if col not in columnas_existentes:
+                    try:
+                        db_query(f"ALTER TABLE usuarios ADD COLUMN {col} {tipo}", commit=True)
+                        print(f"-> Columna '{col}' agregada a la tabla usuarios.")
+                    except Exception as e:
+                        print(f"-> Error agregando columna '{col}': {e}")
+        
+        # Crear sala por defecto
         res_salas = db_query("SELECT COUNT(*) FROM salas", fetchall=False)
         if res_salas and res_salas[0] == 0:
-            db_query("INSERT INTO salas (nombre, icono, limite) VALUES (?, ?, ?)", ("Sala General", "🌍", 150), commit=True)
+            db_query("INSERT INTO salas (nombre, icono, limite) VALUES (?, ?, ?)", 
+                    ("Sala General", "🌍", 150), commit=True)
             print("-> Sala por defecto 'Sala General' creada.")
 
+        # Crear administrador por defecto
         res_admin = db_query("SELECT id FROM usuarios WHERE username = 'Administrador'", fetchall=False)
         if not res_admin:
             db_query("INSERT INTO usuarios (username, password, rol, estado, genero, avatar) VALUES (?, ?, ?, ?, ?, ?)", 
@@ -200,14 +224,16 @@ def verificar_y_limpiar_sanciones(username):
             dt_exp = datetime.datetime.fromisoformat(ban_expira)
             if ahora > dt_exp:
                 db_query("UPDATE usuarios SET estado='activo', ban_expira=NULL WHERE username=?", (username,), commit=True)
-        except: pass
+        except:
+            pass
 
     if estado == 'silenciado' and mute_expira:
         try:
             dt_exp = datetime.datetime.fromisoformat(mute_expira)
             if ahora > dt_exp:
                 db_query("UPDATE usuarios SET estado='activo', mute_expira=NULL WHERE username=?", (username,), commit=True)
-        except: pass
+        except:
+            pass
 
 def calcular_fecha_expiracion(minutos_str):
     if minutos_str == "perm":
@@ -263,10 +289,14 @@ def api_actualizar_avatar():
     data = request.json
     user = data.get("username", "").strip()
     avatar = data.get("avatar", "")
+    
+    # ✅ Validar que el avatar no sea demasiado grande (máximo 2MB)
+    if avatar and len(avatar) > 2 * 1024 * 1024:  # 2 MB
+        return jsonify({"success": False, "message": "La imagen es demasiado grande. Máximo 2MB."})
+    
     db_query("UPDATE usuarios SET avatar=? WHERE username=?", (avatar, user), commit=True)
     return jsonify({"success": True})
 
-# --- ENDPOINTS DE SALAS ---
 @app.route('/api/salas/list', methods=['GET'])
 def api_salas_list():
     rows = db_query("SELECT id, nombre, icono, limite FROM salas ORDER BY id ASC", fetchall=True)
@@ -294,8 +324,10 @@ def api_admin_crear_sala():
     data = request.json
     nombre = data.get("nombre", "").strip()
     icono = data.get("icono", "").strip() or "💬"
-    try: limite = int(data.get("limite", 150))
-    except: limite = 150
+    try: 
+        limite = int(data.get("limite", 150))
+    except: 
+        limite = 150
         
     if not nombre:
         return jsonify({"success": False, "message": "El nombre de la sala es obligatorio."})
@@ -333,9 +365,12 @@ def api_admin_users():
             res_releer = db_query("SELECT estado FROM usuarios WHERE id=?", (r[0],))
             est_db = res_releer[0] if res_releer else 'activo'
             
-            if est_db == 'ban': status_visual = 'baneado'
-            elif uname in online_usernames: status_visual = 'conectado'
-            else: status_visual = 'desconectado'
+            if est_db == 'ban': 
+                status_visual = 'baneado'
+            elif uname in online_usernames: 
+                status_visual = 'conectado'
+            else: 
+                status_visual = 'desconectado'
                 
             usuarios.append({
                 "id": r[0],
@@ -344,7 +379,7 @@ def api_admin_users():
                 "rol": r[3],
                 "estado": est_db,
                 "status_visual": status_visual,
-                "genero": r[5]
+                "genero": r[5] if len(r) > 5 else 'hombre'
             })
     
     admin_room = None
@@ -370,6 +405,9 @@ def api_admin_crear_usuario():
     gender = data.get("genero", "hombre")
     rol = data.get("rol", "user")
     
+    if not user or not passw:
+        return jsonify({"success": False, "message": "Campos incompletos."})
+        
     if db_query("SELECT id FROM usuarios WHERE username=?", (user,)):
         return jsonify({"success": False, "message": "El usuario ya existe."})
         
@@ -397,7 +435,8 @@ def api_admin_modificar_usuario_completo():
         if db_query("SELECT id FROM usuarios WHERE username=?", (nuevo_nick,)):
             return jsonify({"success": False, "message": "El nuevo nombre de usuario ya está en uso."})
 
-    db_query("UPDATE usuarios SET username=?, password=?, rol=? WHERE id=?", (nuevo_nick, nueva_pass, nuevo_rol, user_id), commit=True)
+    db_query("UPDATE usuarios SET username=?, password=?, rol=? WHERE id=?", 
+            (nuevo_nick, nueva_pass, nuevo_rol, user_id), commit=True)
     socketio.emit('force_action', {"target": antiguo_nick, "accion": "rol_change", "nuevo_rol": nuevo_rol}, broadcast=True)
     broadcast_user_list_all_rooms()
     return jsonify({"success": True})
@@ -421,7 +460,8 @@ def api_admin_cambiar_estado():
     elif accion == "patear_sala":
         if not sala_admin:
             return jsonify({"success": False, "message": "El administrador no está posicionado en ninguna sala."})
-        db_query("INSERT INTO bloqueos_salas (username, sala, expira) VALUES (?, ?, ?)", (user, sala_admin, expiracion if expiracion else "perm"), commit=True)
+        db_query("INSERT INTO bloqueos_salas (username, sala, expira) VALUES (?, ?, ?)", 
+                (user, sala_admin, expiracion if expiracion else "perm"), commit=True)
         socketio.emit('force_action', {"target": user, "accion": "kick_sala", "sala": sala_admin}, broadcast=True)
         
     return jsonify({"success": True})
@@ -449,6 +489,8 @@ def api_admin_crear_sticker():
     nom = data.get("nombre")
     url = data.get("url")
     tipo = data.get("tipo", "sticker")
+    if not nom or not url:
+        return jsonify({"success": False, "message": "Nombre y URL son obligatorios"})
     db_query("INSERT INTO stickers (nombre, url, tipo) VALUES (?, ?, ?)", (nom, url, tipo), commit=True)
     return jsonify({"success": True})
 
@@ -459,7 +501,7 @@ def api_admin_eliminar_sticker():
     db_query("DELETE FROM stickers WHERE id=?", (sid,), commit=True)
     return jsonify({"success": True})
 
-# --- NUEVOS ENDPOINTS DE CONFIGURACIÓN DE CONEXIÓN ---
+# --- ENDPOINTS DE CONFIGURACIÓN DE CONEXIÓN ---
 @app.route('/api/admin/get_db_config', methods=['GET'])
 def api_get_db_config():
     cfg = db_config.copy()
@@ -506,26 +548,29 @@ def api_save_db_config():
 @socketio.on('join_chat')
 def handle_join(data):
     username = data.get('username')
-    if not username: return
+    if not username: 
+        return
     
     verificar_y_limpiar_sanciones(username)
     res = db_query("SELECT rol, genero, avatar, estado FROM usuarios WHERE username=?", (username,))
     if res:
         rol, genero, avatar, estado = res
-        if estado == 'ban': return
+        if estado == 'ban': 
+            return
         
         usuarios_conectados[request.sid] = {
             "username": username,
             "rol": rol,
             "genero": genero,
-            "avatar": avatar,
+            "avatar": avatar or "",
             "sala_actual": None
         }
         broadcast_user_list_all_rooms()
 
 @socketio.on('cambiar_sala')
 def handle_cambiar_sala(data):
-    if request.sid not in usuarios_conectados: return
+    if request.sid not in usuarios_conectados: 
+        return
     user_info = usuarios_conectados[request.sid]
     username = user_info["username"]
     
@@ -547,7 +592,8 @@ def handle_cambiar_sala(data):
                         return
                     else:
                         db_query("DELETE FROM bloqueos_salas WHERE id=?", (b_id,), commit=True)
-                except: pass
+                except: 
+                    pass
     
     res_sala = db_query("SELECT limite FROM salas WHERE nombre=?", (sala_nueva,))
     if not res_sala:
@@ -558,7 +604,8 @@ def handle_cambiar_sala(data):
     conteo_actual = 0
     for u in usuarios_conectados.values():
         if u.get("sala_actual") == sala_nueva:
-            if u.get("username") == "Administrador" and not admin_visible: continue
+            if u.get("username") == "Administrador" and not admin_visible: 
+                continue
             conteo_actual += 1
     
     if conteo_actual >= limite_max:
@@ -594,11 +641,13 @@ def handle_disconnect():
 
 @socketio.on('send_msg')
 def handle_msg(data):
-    if request.sid not in usuarios_conectados: return
+    if request.sid not in usuarios_conectados: 
+        return
     user_info = usuarios_conectados[request.sid]
     username = user_info["username"]
     sala_destino = user_info["sala_actual"]
-    if not sala_destino: return
+    if not sala_destino: 
+        return
     
     verificar_y_limpiar_sanciones(username)
     res = db_query("SELECT estado, rol FROM usuarios WHERE username=?", (username,))
@@ -626,14 +675,16 @@ def handle_msg(data):
 
 @socketio.on('send_private_msg')
 def handle_private_msg(data):
-    if request.sid not in usuarios_conectados: return
+    if request.sid not in usuarios_conectados: 
+        return
     sender = usuarios_conectados[request.sid]["username"]
     target = data.get("target")
     texto = data.get("texto")
     
     verificar_y_limpiar_sanciones(sender)
     res = db_query("SELECT estado FROM usuarios WHERE username=?", (sender,))
-    if res and res[0] == 'silenciado': return
+    if res and res[0] == 'silenciado': 
+        return
     
     payload = {"sender": sender, "target": target, "texto": texto}
     for sid, info in usuarios_conectados.items():
@@ -658,7 +709,8 @@ def broadcast_user_list_all_rooms():
         for sid, info in usuarios_conectados.items():
             if info["sala_actual"] == sala:
                 uname = info["username"]
-                if uname == "Administrador" and not admin_visible: continue
+                if uname == "Administrador" and not admin_visible: 
+                    continue
                     
                 meta = db_users_dict.get(uname, {"rol": "user", "genero": "hombre", "avatar": "", "estado": "activo"})
                 status_visual = 'baneado' if meta["estado"] == 'ban' else 'conectado'
@@ -673,147 +725,847 @@ def broadcast_user_list_all_rooms():
         socketio.emit('update_users', lista_sala, to=sala)
 
 # ==========================================
-# 4. PLANTILLA HTML DE LA INTERFAZ
+# 4. PLANTILLA HTML DE LA INTERFAZ (VERSIÓN RESPONSIVE PARA MÓVIL)
 # ==========================================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>WebChat Profesional - Flask</title>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@twemoji/api@14.1.0/dist/twemoji.min.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/emoji-mart@5.6.0/dist/browser.js"></script>
     <style>
-        html, body { height: 100%; margin: 0; padding: 0; background-color: #121212; color: #ffffff; font-family: Arial, sans-serif; overflow: hidden; }
+        /* === RESET Y ESTILOS BASE === */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { 
+            height: 100%; 
+            margin: 0; 
+            padding: 0; 
+            background-color: #121212; 
+            color: #ffffff; 
+            font-family: Arial, sans-serif; 
+            overflow: hidden;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
         
-        .box-container { max-width: 450px; margin: 80px auto; background: #1e1e1e; padding: 30px; border-radius: 8px; border: 1px solid #333; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        /* === SCROLLBAR PERSONALIZADA === */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #1e1e1e; }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+
+        /* === AUTH SECTION === */
+        .box-container { 
+            max-width: 450px; 
+            margin: 80px auto; 
+            background: #1e1e1e; 
+            padding: 30px; 
+            border-radius: 8px; 
+            border: 1px solid #333; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5); 
+        }
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; margin-bottom: 5px; color: #bbb; font-size: 14px; }
-        .input-control { width: 100%; padding: 10px; background: #2d2d2d; border: 1px solid #444; color: white; border-radius: 4px; box-sizing: border-box; font-size: 14px; }
+        .input-control { 
+            width: 100%; 
+            padding: 10px; 
+            background: #2d2d2d; 
+            border: 1px solid #444; 
+            color: white; 
+            border-radius: 4px; 
+            box-sizing: border-box; 
+            font-size: 14px; 
+            -webkit-appearance: none;
+            appearance: none;
+        }
         .input-control:focus { border-color: #0d6efd; outline: none; }
-        .btn-block { width: 100%; padding: 12px; background: #0d6efd; border: none; color: white; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; margin-top: 10px; }
+        .btn-block { 
+            width: 100%; 
+            padding: 12px; 
+            background: #0d6efd; 
+            border: none; 
+            color: white; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            font-size: 16px; 
+            font-weight: bold; 
+            margin-top: 10px;
+            touch-action: manipulation;
+        }
         .btn-block:hover { background: #0b5ed7; }
-        .btn-link { background: none; border: none; color: #0dcaf0; cursor: pointer; display: block; margin: 15px auto 0; text-decoration: underline; font-size: 14px; }
+        .btn-block:active { transform: scale(0.98); }
+        .btn-link { 
+            background: none; 
+            border: none; 
+            color: #0dcaf0; 
+            cursor: pointer; 
+            display: block; 
+            margin: 15px auto 0; 
+            text-decoration: underline; 
+            font-size: 14px; 
+        }
         .d-none { display: none !important; }
         
-        #lobby-section { max-width: 800px; margin: 50px auto; background: #1e1e1e; padding: 25px; border-radius: 8px; border: 1px solid #333; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        .salas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px; margin-top: 20px; }
-        .sala-card { background: #252525; border: 1px solid #444; border-radius: 6px; padding: 15px; cursor: pointer; text-align: center; transition: transform 0.2s, border-color 0.2s; }
+        /* === LOBBY SECTION === */
+        #lobby-section { 
+            max-width: 800px; 
+            margin: 20px auto; 
+            padding: 15px; 
+            height: calc(100vh - 40px);
+            overflow-y: auto;
+            box-sizing: border-box;
+        }
+        @media (min-width: 768px) {
+            #lobby-section { 
+                margin: 50px auto; 
+                padding: 25px;
+                height: auto;
+                max-height: calc(100vh - 100px);
+            }
+        }
+        .salas-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); 
+            gap: 12px; 
+            margin-top: 15px; 
+        }
+        @media (min-width: 768px) {
+            .salas-grid { 
+                grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); 
+                gap: 15px; 
+                margin-top: 20px;
+            }
+        }
+        .sala-card { 
+            background: #252525; 
+            border: 1px solid #444; 
+            border-radius: 6px; 
+            padding: 15px; 
+            cursor: pointer; 
+            text-align: center; 
+            transition: transform 0.2s, border-color 0.2s;
+            touch-action: manipulation;
+        }
         .sala-card:hover { transform: translateY(-3px); border-color: #0dcaf0; background: #2a2a2a; }
-        .sala-icon { font-size: 32px; margin-bottom: 8px; display: block; }
-        .sala-name { font-weight: bold; font-size: 16px; color: #fff; margin-bottom: 5px; }
-        .sala-count { font-size: 12px; color: #aaa; }
+        .sala-card:active { transform: scale(0.96); }
+        .sala-icon { font-size: 28px; margin-bottom: 6px; display: block; }
+        .sala-name { font-weight: bold; font-size: 14px; color: #fff; margin-bottom: 4px; }
+        .sala-count { font-size: 11px; color: #aaa; }
 
-        #chat-section { display: flex; flex-direction: column; height: 100vh; padding: 15px; box-sizing: border-box; }
-        .chat-header-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; position: relative; flex-shrink: 0; }
-        .chat-layout { display: flex; flex-grow: 1; height: calc(100vh - 100px); min-height: 0; position: relative; }
-        .main-chat { flex: 3; display: flex; flex-direction: column; height: 100%; min-height: 0; position: relative; padding-right: 10px; }
-        #chat-box { flex-grow: 1; background: #151515; border: 1px solid #333; padding: 15px; overflow-y: auto; border-radius: 6px; margin-bottom: 15px; min-height: 0; }
-        .controls-row { display: flex; gap: 10px; flex-shrink: 0; position: relative; }
-        .flex-grow { flex-grow: 1; }
-        .toggle-divider-zone { position: relative; display: flex; align-items: center; justify-content: center; width: 20px; flex-shrink: 0; z-index: 10; }
+        /* === CHAT SECTION === */
+        #chat-section { 
+            display: flex; 
+            flex-direction: column; 
+            height: 100vh; 
+            padding: 8px; 
+            box-sizing: border-box;
+        }
+        @media (min-width: 768px) {
+            #chat-section { padding: 15px; }
+        }
+        .chat-header-container { 
+            display: flex; 
+            flex-wrap: wrap;
+            justify-content: space-between; 
+            align-items: center; 
+            margin-bottom: 8px; 
+            position: relative; 
+            flex-shrink: 0;
+            gap: 8px;
+        }
+        .chat-layout { 
+            display: flex; 
+            flex-direction: column;
+            flex-grow: 1; 
+            height: calc(100vh - 80px); 
+            min-height: 0; 
+            position: relative; 
+        }
+        @media (min-width: 768px) {
+            .chat-layout { 
+                flex-direction: row;
+                height: calc(100vh - 100px);
+            }
+        }
+        .main-chat { 
+            flex: 1; 
+            display: flex; 
+            flex-direction: column; 
+            height: 100%; 
+            min-height: 0; 
+            position: relative; 
+            padding-right: 0;
+        }
+        @media (min-width: 768px) {
+            .main-chat { padding-right: 10px; }
+        }
+        #chat-box { 
+            flex-grow: 1; 
+            background: #151515; 
+            border: 1px solid #333; 
+            padding: 10px; 
+            overflow-y: auto; 
+            border-radius: 6px; 
+            margin-bottom: 10px; 
+            min-height: 0;
+            font-size: 14px;
+        }
+        @media (min-width: 768px) {
+            #chat-box { padding: 15px; margin-bottom: 15px; font-size: 16px; }
+        }
+        .controls-row { 
+            display: flex; 
+            gap: 6px; 
+            flex-shrink: 0; 
+            position: relative;
+            flex-wrap: nowrap;
+        }
+        @media (min-width: 768px) {
+            .controls-row { gap: 10px; }
+        }
+        .flex-grow { flex-grow: 1; min-width: 60px; }
+        .toggle-divider-zone { display: none; }
+        @media (min-width: 768px) {
+            .toggle-divider-zone { 
+                display: flex;
+                align-items: center; 
+                justify-content: center; 
+                width: 20px; 
+                flex-shrink: 0; 
+                z-index: 10; 
+            }
+        }
         
-        #toggle-panel-btn { background: #222; border: 1px solid #444; color: #0dcaf0; width: 22px; height: 45px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; padding: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.5); position: absolute; }
+        #toggle-panel-btn { 
+            background: #222; 
+            border: 1px solid #444; 
+            color: #0dcaf0; 
+            width: 22px; 
+            height: 45px; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            display: none; 
+            align-items: center; 
+            justify-content: center; 
+            font-size: 11px; 
+            font-weight: bold; 
+            padding: 0; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.5); 
+            position: absolute; 
+        }
+        @media (min-width: 768px) {
+            #toggle-panel-btn { display: flex; }
+        }
 
-        .side-users { width: 280px; background: #1e1e1e; border-radius: 6px; border: 1px solid #333; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; min-height: 0; transition: width 0.3s, opacity 0.2s; overflow: hidden; flex-shrink: 0; }
-        .side-users-inner { display: flex; flex-direction: column; width: 280px; height: 100%; padding: 15px; box-sizing: border-box; min-height: 0; }
+        .side-users { 
+            display: none;
+            width: 100%; 
+            background: #1e1e1e; 
+            border-radius: 6px; 
+            border: 1px solid #333; 
+            height: 200px; 
+            box-sizing: border-box; 
+            flex-direction: column; 
+            min-height: 0; 
+            overflow: hidden; 
+            flex-shrink: 0; 
+            margin-top: 8px;
+        }
+        @media (min-width: 768px) {
+            .side-users { 
+                display: flex;
+                width: 280px; 
+                height: 100%; 
+                margin-top: 0;
+                transition: width 0.3s, opacity 0.2s; 
+            }
+            .side-users.collapsed { width: 0 !important; opacity: 0; border: none; }
+        }
+        .side-users-inner { 
+            display: flex; 
+            flex-direction: column; 
+            width: 100%; 
+            height: 100%; 
+            padding: 10px; 
+            box-sizing: border-box; 
+            min-height: 0; 
+        }
+        @media (min-width: 768px) {
+            .side-users-inner { width: 280px; padding: 15px; }
+        }
         #lista-usuarios { flex-grow: 1; overflow-y: auto; min-height: 0; }
-        .side-users.collapsed { width: 0 !important; opacity: 0; border: none; }
         
-        .status-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 8px; }
+        /* === ESTILOS DE MENSAJES === */
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; flex-shrink: 0; }
+        @media (min-width: 768px) {
+            .status-dot { width: 9px; height: 9px; margin-right: 8px; }
+        }
         .dot-green { background-color: #2ec4b6; box-shadow: 0 0 6px #2ec4b6; }
         .dot-red { background-color: #e71d36; }
         .dot-gray { background-color: #6c757d; }
         
-        .badge-admin { color: #ffc107; font-size: 13px; margin-left: 3px; }
-        .badge-mod { color: #0dcaf0; font-size: 13px; margin-left: 3px; }
+        .badge-admin { color: #ffc107; font-size: 12px; margin-left: 3px; }
+        .badge-mod { color: #0dcaf0; font-size: 12px; margin-left: 3px; }
         
-        .chat-msg-line { display: flex; align-items: center; flex-wrap: wrap; margin: 8px 0; }
-        .msg-avatar-img { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; border: 1px solid #555; margin-right: 6px; display: inline-block; }
-        .msg-avatar-initials { width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; color: #ffffff; text-transform: uppercase; border: 1px solid rgba(255,255,255,0.15); margin-right: 6px; }
-        .chat-img-msg { max-width: 120px; max-height: 120px; display: block; margin-top: 5px; border-radius: 4px; }
+        .chat-msg-line { display: flex; align-items: center; flex-wrap: wrap; margin: 4px 0; gap: 2px; }
+        @media (min-width: 768px) {
+            .chat-msg-line { margin: 8px 0; gap: 4px; }
+        }
+        .msg-avatar-img { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; border: 1px solid #555; margin-right: 4px; display: inline-block; flex-shrink: 0; }
+        @media (min-width: 768px) {
+            .msg-avatar-img { width: 24px; height: 24px; margin-right: 6px; }
+        }
+        .msg-avatar-initials { 
+            width: 20px; 
+            height: 20px; 
+            border-radius: 50%; 
+            display: inline-flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-size: 8px; 
+            font-weight: bold; 
+            color: #ffffff; 
+            text-transform: uppercase; 
+            border: 1px solid rgba(255,255,255,0.15); 
+            margin-right: 4px; 
+            flex-shrink: 0;
+        }
+        @media (min-width: 768px) {
+            .msg-avatar-initials { width: 24px; height: 24px; font-size: 10px; margin-right: 6px; }
+        }
+        .chat-img-msg { max-width: 80px; max-height: 80px; display: block; margin-top: 3px; border-radius: 4px; }
+        @media (min-width: 768px) {
+            .chat-img-msg { max-width: 120px; max-height: 120px; margin-top: 5px; }
+        }
         .clickable-nick { cursor: pointer; user-select: none; }
         
-        .custom-context-menu { position: fixed; background: #252525; border: 1px solid #444; border-radius: 4px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); z-index: 1000; display: none; min-width: 160px; padding: 5px 0; }
-        .context-menu-item { padding: 8px 12px; font-size: 13px; color: #eee; cursor: pointer; }
+        /* === CONTEXT MENU === */
+        .custom-context-menu { 
+            position: fixed; 
+            background: #252525; 
+            border: 1px solid #444; 
+            border-radius: 4px; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5); 
+            z-index: 1000; 
+            display: none; 
+            min-width: 160px; 
+            padding: 5px 0; 
+        }
+        .context-menu-item { padding: 8px 12px; font-size: 13px; color: #eee; cursor: pointer; touch-action: manipulation; }
         .context-menu-item:hover { background: #0d6efd; color: white; }
 
-        .private-chat-window { position: fixed; bottom: 15px; right: 310px; width: 320px; height: 380px; background: #1e1e1e; border: 1px solid #0dcaf0; border-radius: 6px; z-index: 500; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.6); }
+        /* === PRIVATE CHAT === */
+        .private-chat-window { 
+            position: fixed; 
+            bottom: 10px; 
+            right: 10px; 
+            width: 280px; 
+            height: 320px; 
+            background: #1e1e1e; 
+            border: 1px solid #0dcaf0; 
+            border-radius: 6px; 
+            z-index: 500; 
+            display: flex; 
+            flex-direction: column; 
+            overflow: hidden; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.6); 
+        }
+        @media (min-width: 768px) {
+            .private-chat-window { 
+                bottom: 15px; 
+                right: 310px; 
+                width: 320px; 
+                height: 380px; 
+            }
+        }
         .private-chat-window.minimized { height: 40px !important; }
-        .private-chat-header { background: #151515; padding: 10px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; cursor: move; user-select: none; }
-        .private-chat-header span { font-size: 13px; font-weight: bold; color: #0dcaf0; pointer-events: none; }
-        .private-chat-actions { display: flex; gap: 8px; }
-        .private-chat-btn-action { background: none; border: none; font-weight: bold; cursor: pointer; font-size: 14px; padding: 0 4px; }
+        .private-chat-header { 
+            background: #151515; 
+            padding: 8px; 
+            border-bottom: 1px solid #333; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            cursor: move; 
+            user-select: none; 
+        }
+        @media (min-width: 768px) {
+            .private-chat-header { padding: 10px; }
+        }
+        .private-chat-header span { font-size: 12px; font-weight: bold; color: #0dcaf0; pointer-events: none; }
+        @media (min-width: 768px) {
+            .private-chat-header span { font-size: 13px; }
+        }
+        .private-chat-actions { display: flex; gap: 6px; }
+        .private-chat-btn-action { background: none; border: none; font-weight: bold; cursor: pointer; font-size: 13px; padding: 0 4px; touch-action: manipulation; }
         .private-chat-min { color: #ffc107; }
         .private-chat-close { color: #dc3545; }
-        .private-chat-box { flex-grow: 1; background: #121212; padding: 10px; overflow-y: auto; font-size: 13px; }
-        .private-chat-footer { padding: 8px; background: #151515; display: flex; gap: 5px; border-top: 1px solid #333; }
-        .private-msg-input { flex-grow: 1; background: #252525; border: 1px solid #444; color: white; padding: 6px; border-radius: 4px; }
-        .private-msg-btn { background: #0dcaf0; color: black; border: none; padding: 6px 12px; font-weight: bold; border-radius: 4px; cursor: pointer; }
+        .private-chat-box { flex-grow: 1; background: #121212; padding: 8px; overflow-y: auto; font-size: 12px; }
+        @media (min-width: 768px) {
+            .private-chat-box { padding: 10px; font-size: 13px; }
+        }
+        .private-chat-footer { padding: 6px; background: #151515; display: flex; gap: 4px; border-top: 1px solid #333; }
+        @media (min-width: 768px) {
+            .private-chat-footer { padding: 8px; gap: 5px; }
+        }
+        .private-msg-input { flex-grow: 1; background: #252525; border: 1px solid #444; color: white; padding: 5px; border-radius: 4px; font-size: 12px; }
+        @media (min-width: 768px) {
+            .private-msg-input { padding: 6px; font-size: 14px; }
+        }
+        .private-msg-btn { background: #0dcaf0; color: black; border: none; padding: 5px 10px; font-weight: bold; border-radius: 4px; cursor: pointer; font-size: 12px; touch-action: manipulation; }
+        @media (min-width: 768px) {
+            .private-msg-btn { padding: 6px 12px; font-size: 14px; }
+        }
 
-        .media-modal { position: absolute; bottom: 55px; left: 60px; width: 360px; background: #1e1e1e; border: 1px solid #444; border-radius: 8px; z-index: 100; padding: 12px; display: none; }
-        .media-modal-tabs { display: flex; gap: 5px; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 5px; }
-        .media-tab-btn { flex: 1; background: #2a2a2a; color: #aaa; border: 1px solid #333; padding: 6px; cursor: pointer; font-size: 12px; border-radius: 4px; }
+        /* === MEDIA MODAL === */
+        .media-modal { 
+            position: absolute; 
+            bottom: 55px; 
+            left: 50%;
+            transform: translateX(-50%);
+            width: 300px; 
+            background: #1e1e1e; 
+            border: 1px solid #444; 
+            border-radius: 8px; 
+            z-index: 100; 
+            padding: 10px; 
+            display: none; 
+        }
+        @media (min-width: 768px) {
+            .media-modal { 
+                left: 60px; 
+                transform: none;
+                width: 360px; 
+                padding: 12px; 
+            }
+        }
+        .media-modal-tabs { display: flex; gap: 5px; margin-bottom: 8px; border-bottom: 1px solid #333; padding-bottom: 4px; }
+        .media-tab-btn { 
+            flex: 1; 
+            background: #2a2a2a; 
+            color: #aaa; 
+            border: 1px solid #333; 
+            padding: 5px; 
+            cursor: pointer; 
+            font-size: 11px; 
+            border-radius: 4px;
+            touch-action: manipulation;
+        }
+        @media (min-width: 768px) {
+            .media-tab-btn { padding: 6px; font-size: 12px; }
+        }
         .media-tab-btn.active { background: #0d6efd; color: white; border-color: #0d6efd; }
-        .search-row { margin-bottom: 10px; }
-        .search-control { width: 100%; padding: 8px; background: #151515; border: 1px solid #444; color: white; border-radius: 4px; box-sizing: border-box; }
-        .media-grid-container { height: 180px; overflow-y: auto; background: #151515; border-radius: 4px; padding: 8px; border: 1px solid #2d2d2d; }
-        .media-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-        .media-item { width: 100%; height: 60px; object-fit: contain; cursor: pointer; border: 1px solid #333; border-radius: 4px; background: #121212; }
+        .search-row { margin-bottom: 8px; }
+        .search-control { 
+            width: 100%; 
+            padding: 6px; 
+            background: #151515; 
+            border: 1px solid #444; 
+            color: white; 
+            border-radius: 4px; 
+            box-sizing: border-box;
+            font-size: 12px;
+        }
+        @media (min-width: 768px) {
+            .search-control { padding: 8px; font-size: 14px; }
+        }
+        .media-grid-container { 
+            height: 140px; 
+            overflow-y: auto; 
+            background: #151515; 
+            border-radius: 4px; 
+            padding: 6px; 
+            border: 1px solid #2d2d2d; 
+        }
+        @media (min-width: 768px) {
+            .media-grid-container { height: 180px; padding: 8px; }
+        }
+        .media-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+        .media-item { width: 100%; height: 50px; object-fit: contain; cursor: pointer; border: 1px solid #333; border-radius: 4px; background: #121212; touch-action: manipulation; }
+        @media (min-width: 768px) {
+            .media-item { height: 60px; gap: 8px; }
+        }
         .media-item:hover { border-color: #0dcaf0; }
         
-        img.emoji { height: 1.35em; width: 1.35em; margin: 0 .07em 0 .1em; vertical-align: -0.15em; display: inline-block; }
-        #emoji-mart-floating-picker { position: absolute; bottom: 55px; left: 10px; z-index: 110; display: none; box-shadow: 0 4px 15px rgba(0,0,0,0.6); }
+        img.emoji { height: 1.2em; width: 1.2em; margin: 0 .05em 0 .08em; vertical-align: -0.15em; display: inline-block; }
+        @media (min-width: 768px) {
+            img.emoji { height: 1.35em; width: 1.35em; margin: 0 .07em 0 .1em; }
+        }
+        #emoji-mart-floating-picker { 
+            position: absolute; 
+            bottom: 55px; 
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 110; 
+            display: none; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.6);
+            max-width: 90vw;
+        }
+        @media (min-width: 768px) {
+            #emoji-mart-floating-picker { 
+                left: 10px; 
+                transform: none;
+                max-width: none;
+            }
+        }
 
-        .avatar-upload-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 340px; background: #1e1e1e; border: 1px solid #444; border-radius: 8px; z-index: 300; padding: 20px; display: none; }
-        .avatar-preview-box { width: 90px; height: 90px; border-radius: 50%; object-fit: cover; border: 2px solid #0dcaf0; display: block; margin: 15px auto; }
+        /* === AVATAR MODAL === */
+        .avatar-upload-modal { 
+            position: fixed; 
+            top: 50%; 
+            left: 50%; 
+            transform: translate(-50%, -50%); 
+            width: 300px; 
+            background: #1e1e1e; 
+            border: 1px solid #444; 
+            border-radius: 8px; 
+            z-index: 300; 
+            padding: 15px; 
+            display: none; 
+        }
+        @media (min-width: 768px) {
+            .avatar-upload-modal { width: 340px; padding: 20px; }
+        }
+        .avatar-preview-box { 
+            width: 70px; 
+            height: 70px; 
+            border-radius: 50%; 
+            object-fit: cover; 
+            border: 2px solid #0dcaf0; 
+            display: block; 
+            margin: 10px auto; 
+        }
+        @media (min-width: 768px) {
+            .avatar-preview-box { width: 90px; height: 90px; margin: 15px auto; }
+        }
         
-        .profile-menu-container { position: relative; display: flex; align-items: center; cursor: pointer; user-select: none; padding: 5px 10px; border-radius: 20px; }
-        .profile-menu-container:hover { background: #252525; }
-        .profile-text-link { color: #ffffff; font-size: 14px; font-weight: bold; margin-right: 10px; }
-        .profile-avatar-img { width: 35px; height: 35px; border-radius: 50%; object-fit: cover; border: 1px solid #444; }
-        .profile-avatar-initials { width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: bold; color: #ffffff; text-transform: uppercase; border: 1px solid rgba(255,255,255,0.2); }
+        /* === PROFILE MENU === */
+        .profile-menu-container { 
+            position: relative; 
+            display: flex; 
+            align-items: center; 
+            cursor: pointer; 
+            user-select: none; 
+            padding: 4px 8px; 
+            border-radius: 20px;
+            touch-action: manipulation;
+        }
+        @media (min-width: 768px) {
+            .profile-menu-container { padding: 5px 10px; }
+        }
+        .profile-text-link { color: #ffffff; font-size: 12px; font-weight: bold; margin-right: 6px; }
+        @media (min-width: 768px) {
+            .profile-text-link { font-size: 14px; margin-right: 10px; }
+        }
+        .profile-avatar-img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; border: 1px solid #444; }
+        @media (min-width: 768px) {
+            .profile-avatar-img { width: 35px; height: 35px; }
+        }
+        .profile-avatar-initials { 
+            width: 28px; 
+            height: 28px; 
+            border-radius: 50%; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-size: 11px; 
+            font-weight: bold; 
+            color: #ffffff; 
+            text-transform: uppercase; 
+            border: 1px solid rgba(255,255,255,0.2); 
+        }
+        @media (min-width: 768px) {
+            .profile-avatar-initials { width: 35px; height: 35px; font-size: 13px; }
+        }
         
-        .profile-dropdown-list { position: absolute; top: 45px; right: 0; width: 230px; background: #1e1e1e; border: 1px solid #333; border-radius: 6px; z-index: 200; display: none; padding: 5px 0; }
-        .profile-dropdown-item { padding: 10px 15px; font-size: 14px; color: #bbb; display: flex; justify-content: space-between; align-items: center; }
+        .profile-dropdown-list { 
+            position: absolute; 
+            top: 40px; 
+            right: 0; 
+            width: 200px; 
+            background: #1e1e1e; 
+            border: 1px solid #333; 
+            border-radius: 6px; 
+            z-index: 200; 
+            display: none; 
+            padding: 5px 0; 
+        }
+        @media (min-width: 768px) {
+            .profile-dropdown-list { top: 45px; width: 230px; }
+        }
+        .profile-dropdown-item { 
+            padding: 8px 12px; 
+            font-size: 13px; 
+            color: #bbb; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            touch-action: manipulation;
+        }
+        @media (min-width: 768px) {
+            .profile-dropdown-item { padding: 10px 15px; font-size: 14px; }
+        }
         .profile-dropdown-item:hover { background: #2d2d2d; color: #fff; }
-        .profile-dropdown-divider { height: 1px; background: #333; margin: 5px 0; }
-        .profile-submenu-panel { background: #151515; padding: 10px 15px; border-bottom: 1px solid #2d2d2d; display: none; }
-        .submenu-title { font-size: 11px; color: #0dcaf0; font-weight: bold; text-transform: uppercase; margin-bottom: 8px; display: block; }
-        .submenu-grid { display: flex; flex-direction: column; gap: 8px; }
-        .submenu-field { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #aaa; }
-        .submenu-select { background: #252525; border: 1px solid #444; color: white; padding: 4px 6px; border-radius: 4px; font-size: 12px; width: 110px; }
+        .profile-dropdown-divider { height: 1px; background: #333; margin: 4px 0; }
+        .profile-submenu-panel { 
+            background: #151515; 
+            padding: 8px 12px; 
+            border-bottom: 1px solid #2d2d2d; 
+            display: none; 
+        }
+        @media (min-width: 768px) {
+            .profile-submenu-panel { padding: 10px 15px; }
+        }
+        .submenu-title { font-size: 10px; color: #0dcaf0; font-weight: bold; text-transform: uppercase; margin-bottom: 6px; display: block; }
+        @media (min-width: 768px) {
+            .submenu-title { font-size: 11px; margin-bottom: 8px; }
+        }
+        .submenu-grid { display: flex; flex-direction: column; gap: 6px; }
+        .submenu-field { 
+            display: flex; 
+            align-items: center; 
+            justify-content: space-between; 
+            font-size: 11px; 
+            color: #aaa; 
+        }
+        @media (min-width: 768px) {
+            .submenu-field { font-size: 12px; }
+        }
+        .submenu-select { 
+            background: #252525; 
+            border: 1px solid #444; 
+            color: white; 
+            padding: 3px 5px; 
+            border-radius: 4px; 
+            font-size: 11px; 
+            width: 90px;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+        @media (min-width: 768px) {
+            .submenu-select { padding: 4px 6px; font-size: 12px; width: 110px; }
+        }
         
-        #admin-section { height: 100vh; overflow-y: auto; padding: 20px; box-sizing: border-box; }
-        .admin-box { background: #1e1e1e; padding: 25px; border-radius: 8px; border: 1px solid #333; margin-bottom: 20px; }
-        .admin-nav { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 15px; margin-bottom: 20px; }
-        .tabs-header { display: flex; gap: 5px; margin-bottom: 20px; border-bottom: 1px solid #333; }
-        .tab-btn { background: #2d2d2d; color: #aaa; border: 1px solid #333; border-bottom: none; padding: 10px 20px; cursor: pointer; font-weight: bold; border-top-left-radius: 4px; border-top-right-radius: 4px; }
+        /* === ADMIN SECTION === */
+        #admin-section { 
+            height: 100vh; 
+            overflow-y: auto; 
+            padding: 10px; 
+            box-sizing: border-box; 
+        }
+        @media (min-width: 768px) {
+            #admin-section { padding: 20px; }
+        }
+        .admin-box { 
+            background: #1e1e1e; 
+            padding: 15px; 
+            border-radius: 8px; 
+            border: 1px solid #333; 
+            margin-bottom: 15px; 
+        }
+        @media (min-width: 768px) {
+            .admin-box { padding: 25px; margin-bottom: 20px; }
+        }
+        .admin-nav { 
+            display: flex; 
+            flex-wrap: wrap;
+            justify-content: space-between; 
+            align-items: center; 
+            border-bottom: 1px solid #333; 
+            padding-bottom: 10px; 
+            margin-bottom: 15px;
+            gap: 10px;
+        }
+        @media (min-width: 768px) {
+            .admin-nav { padding-bottom: 15px; margin-bottom: 20px; }
+        }
+        .tabs-header { 
+            display: flex; 
+            flex-wrap: wrap;
+            gap: 4px; 
+            margin-bottom: 15px; 
+            border-bottom: 1px solid #333; 
+        }
+        @media (min-width: 768px) {
+            .tabs-header { gap: 5px; margin-bottom: 20px; }
+        }
+        .tab-btn { 
+            background: #2d2d2d; 
+            color: #aaa; 
+            border: 1px solid #333; 
+            border-bottom: none; 
+            padding: 8px 12px; 
+            cursor: pointer; 
+            font-weight: bold; 
+            border-top-left-radius: 4px; 
+            border-top-right-radius: 4px;
+            font-size: 11px;
+            touch-action: manipulation;
+        }
+        @media (min-width: 768px) {
+            .tab-btn { padding: 10px 20px; font-size: 14px; }
+        }
         .tab-btn.active { background: #0d6efd; color: white; border-color: #0d6efd; }
-        .form-inline-admin { display: flex; gap: 10px; background: #151515; padding: 15px; border-radius: 6px; border: 1px solid #333; flex-wrap: wrap; align-items: flex-end;}
+        .form-inline-admin { 
+            display: flex; 
+            flex-wrap: wrap;
+            gap: 8px; 
+            background: #151515; 
+            padding: 10px; 
+            border-radius: 6px; 
+            border: 1px solid #333; 
+            align-items: flex-end;
+        }
+        @media (min-width: 768px) {
+            .form-inline-admin { gap: 10px; padding: 15px; }
+        }
         
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: #151515; }
-        th, td { padding: 12px; border: 1px solid #333; text-align: left; font-size: 14px; }
+        /* === TABLAS === */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; background: #151515; font-size: 12px; }
+        @media (min-width: 768px) {
+            table { font-size: 14px; margin-top: 15px; }
+        }
+        th, td { padding: 6px 8px; border: 1px solid #333; text-align: left; }
+        @media (min-width: 768px) {
+            th, td { padding: 12px; }
+        }
         th { background: #2d2d2d; color: #aaa; }
-        .btn-sm { padding: 5px 8px; font-size: 12px; cursor: pointer; border: none; border-radius: 3px; font-weight: bold; margin-right: 2px; }
-        .badge { padding: 3px 8px; border-radius: 3px; font-size: 11px; font-weight: bold; text-transform: uppercase; display: inline-block; }
-        .admin-sticker-preview { width: 40px; height: 40px; object-fit: contain; background: #121212; }
-        .admin-rol-select { background: #252525; border: 1px solid #555; color: white; font-size: 12px; padding: 4px; border-radius: 4px; }
+        .btn-sm { 
+            padding: 4px 6px; 
+            font-size: 10px; 
+            cursor: pointer; 
+            border: none; 
+            border-radius: 3px; 
+            font-weight: bold; 
+            margin-right: 2px;
+            touch-action: manipulation;
+        }
+        @media (min-width: 768px) {
+            .btn-sm { padding: 5px 8px; font-size: 12px; margin-right: 2px; }
+        }
+        .badge { padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: bold; text-transform: uppercase; display: inline-block; }
+        @media (min-width: 768px) {
+            .badge { padding: 3px 8px; font-size: 11px; }
+        }
+        .admin-sticker-preview { width: 30px; height: 30px; object-fit: contain; background: #121212; }
+        @media (min-width: 768px) {
+            .admin-sticker-preview { width: 40px; height: 40px; }
+        }
+        .admin-rol-select { 
+            background: #252525; 
+            border: 1px solid #555; 
+            color: white; 
+            font-size: 10px; 
+            padding: 3px; 
+            border-radius: 4px;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+        @media (min-width: 768px) {
+            .admin-rol-select { font-size: 12px; padding: 4px; }
+        }
         
-        .btn-visibilidad { background: #6f42c1; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; transition: background 0.2s; margin-bottom: 15px; display: inline-block; }
+        .btn-visibilidad { 
+            background: #6f42c1; 
+            color: white; 
+            padding: 8px 15px; 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            font-weight: bold; 
+            font-size: 12px; 
+            transition: background 0.2s; 
+            margin-bottom: 10px; 
+            display: inline-block;
+            touch-action: manipulation;
+        }
+        @media (min-width: 768px) {
+            .btn-visibilidad { padding: 10px 20px; font-size: 14px; margin-bottom: 15px; }
+        }
         .btn-visibilidad:hover { background: #59359a; }
+        .btn-visibilidad:active { transform: scale(0.96); }
         
-        .table-input-edit { background: #252525; border: 1px solid #555; color: white; font-size: 13px; padding: 4px 8px; border-radius: 4px; width: 110px; box-sizing: border-box; }
+        .table-input-edit { 
+            background: #252525; 
+            border: 1px solid #555; 
+            color: white; 
+            font-size: 11px; 
+            padding: 3px 5px; 
+            border-radius: 4px; 
+            width: 80px; 
+            box-sizing: border-box;
+        }
+        @media (min-width: 768px) {
+            .table-input-edit { font-size: 13px; padding: 4px 8px; width: 110px; }
+        }
         .table-input-edit:focus { border-color: #0dcaf0; outline: none; }
-        .admin-time-select { background: #222; border: 1px solid #555; color: #ffc107; font-size: 11px; padding: 4px; border-radius: 4px; font-weight: bold; margin-right: 4px; }
-        .admin-action-container { display: flex; align-items: center; margin-bottom: 4px; }
+        .admin-time-select { 
+            background: #222; 
+            border: 1px solid #555; 
+            color: #ffc107; 
+            font-size: 10px; 
+            padding: 3px; 
+            border-radius: 4px; 
+            font-weight: bold; 
+            margin-right: 3px;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+        @media (min-width: 768px) {
+            .admin-time-select { font-size: 11px; padding: 4px; margin-right: 4px; }
+        }
+        .admin-action-container { display: flex; align-items: center; margin-bottom: 3px; flex-wrap: wrap; gap: 2px; }
+        @media (min-width: 768px) {
+            .admin-action-container { margin-bottom: 4px; gap: 4px; }
+        }
 
-        /* ESTILOS DE LA PESTAÑA CONEXIÓN */
-        .db-status-banner { padding: 15px; border-radius: 6px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; font-weight: bold; }
+        /* === DB CONNECTION === */
+        .db-status-banner { 
+            padding: 10px; 
+            border-radius: 6px; 
+            margin-bottom: 15px; 
+            display: flex; 
+            flex-wrap: wrap;
+            align-items: center; 
+            justify-content: space-between; 
+            font-weight: bold;
+            font-size: 12px;
+        }
+        @media (min-width: 768px) {
+            .db-status-banner { padding: 15px; margin-bottom: 20px; font-size: 14px; }
+        }
         .status-local-mode { background: rgba(13, 110, 253, 0.15); border: 1px solid #0d6efd; color: #0dcaf0; }
         .status-online-mode { background: rgba(25, 135, 84, 0.15); border: 1px solid #198754; color: #198754; }
-        .form-db-config { background: #151515; padding: 20px; border-radius: 6px; border: 1px solid #333; max-width: 600px; }
+        .form-db-config { background: #151515; padding: 15px; border-radius: 6px; border: 1px solid #333; max-width: 600px; }
+        @media (min-width: 768px) {
+            .form-db-config { padding: 20px; }
+        }
+
+        /* === BOTONES RESPONSIVE === */
+        .btn-mobile-sm { font-size: 12px; padding: 6px 10px; }
+        @media (min-width: 768px) {
+            .btn-mobile-sm { font-size: 14px; padding: 8px 15px; }
+        }
+
+        /* === TEXTO RESPONSIVE === */
+        .text-mobile-sm { font-size: 12px; }
+        @media (min-width: 768px) {
+            .text-mobile-sm { font-size: 14px; }
+        }
+        .text-mobile-lg { font-size: 16px; }
+        @media (min-width: 768px) {
+            .text-mobile-lg { font-size: 18px; }
+        }
+
+        /* === AJUSTES DE VISIBILIDAD EN MÓVIL === */
+        .mobile-hidden { display: none !important; }
+        @media (min-width: 768px) {
+            .mobile-hidden { display: block !important; }
+        }
     </style>
 </head>
 <body>
@@ -826,7 +1578,7 @@ HTML_TEMPLATE = """
     <div id="private-chats-container"></div>
 
     <div id="auth-section" class="box-container">
-        <h2 id="auth-title" style="margin-top: 0; margin-bottom: 20px; text-align: center;">Iniciar Sesión</h2>
+        <h2 id="auth-title" style="margin-top: 0; margin-bottom: 15px; text-align: center; font-size: 20px;">Iniciar Sesión</h2>
         <div class="form-group">
             <label>Usuario</label>
             <input type="text" id="username" class="input-control" placeholder="Usuario" onkeypress="if(event.key==='Enter') procesarAutenticacion()">
@@ -847,11 +1599,11 @@ HTML_TEMPLATE = """
     </div>
 
     <div id="lobby-section" class="d-none">
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 15px;">
-            <h2 style="margin: 0;">Seleccionar Sala de Chat</h2>
-            <div style="display: flex; gap: 10px;">
-                <button id="btn-go-admin-lobby" style="background: #ffc107; color: black; padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;" class="d-none" onclick="irAlPanelDesdeLobby()">Admin Panel</button>
-                <button style="background: #dc3545; color: white; padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer;" onclick="location.reload()">Salir</button>
+        <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 10px; gap: 10px;">
+            <h2 style="margin: 0; font-size: 18px;">Seleccionar Sala de Chat</h2>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button id="btn-go-admin-lobby" style="background: #ffc107; color: black; padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px;" class="d-none" onclick="irAlPanelDesdeLobby()">Admin Panel</button>
+                <button style="background: #dc3545; color: white; padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;" onclick="location.reload()">Salir</button>
             </div>
         </div>
         <div id="contenedor-salas-grid" class="salas-grid"></div>
@@ -859,20 +1611,20 @@ HTML_TEMPLATE = """
 
     <div id="chat-section" class="d-none">
         <div class="chat-header-container">
-            <div style="display: flex; align-items: center; gap: 12px;">
-                <button style="background: #333; color: #0dcaf0; border: 1px solid #555; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;" onclick="volverAlLobbyDeSalas()">< Volver a las Salas</button>
-                <h3 id="welcome-msg" style="margin: 0;">Conectado</h3>
-                <span id="current-room-indicator" style="background: #0d6efd; color: white; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold;">Sala</span>
+            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                <button style="background: #333; color: #0dcaf0; border: 1px solid #555; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 11px;" onclick="volverAlLobbyDeSalas()">← Salas</button>
+                <h3 id="welcome-msg" style="margin: 0; font-size: 13px;">Conectado</h3>
+                <span id="current-room-indicator" style="background: #0d6efd; color: white; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: bold;">Sala</span>
             </div>
-            <div style="display: flex; align-items: center; gap: 15px;">
-                <button id="btn-go-admin" style="background: #ffc107; color: black; padding: 10px 18px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;" class="d-none" onclick="irAlPanelDesdeChat()">Ir al panel de administrador</button>
+            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                <button id="btn-go-admin" style="background: #ffc107; color: black; padding: 4px 10px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 11px;" class="d-none" onclick="irAlPanelDesdeChat()">Admin</button>
                 
                 <div class="profile-menu-container" id="profile-trigger" onclick="toggleProfileDropdown(event)">
                     <span class="profile-text-link">Perfil</span>
                     <div id="profile-avatar-slot"></div>
                     
                     <div class="profile-dropdown-list" id="profile-dropdown">
-                        <div class="profile-dropdown-item" style="font-size:12px; color:#666; pointer-events: none;" id="dropdown-user-info">Usuario</div>
+                        <div class="profile-dropdown-item" style="font-size:11px; color:#666; pointer-events: none;" id="dropdown-user-info">Usuario</div>
                         <div class="profile-dropdown-divider"></div>
                         
                         <div class="profile-dropdown-item" onclick="toggleSubmenu(event, 'submenu-nick')">
@@ -959,10 +1711,10 @@ HTML_TEMPLATE = """
                         <button id="media-tab-sticker" class="media-tab-btn" onclick="switchMediaTab('sticker')">Stickers</button>
                     </div>
                     <div id="search-container-gif" class="search-row">
-                        <input type="text" id="media-search-gif" class="search-control" placeholder="Buscar GIF por nombre..." oninput="filtrarMedia('gif')">
+                        <input type="text" id="media-search-gif" class="search-control" placeholder="Buscar GIF..." oninput="filtrarMedia('gif')">
                     </div>
                     <div id="search-container-sticker" class="search-row d-none">
-                        <input type="text" id="media-search-sticker" class="search-control" placeholder="Buscar Sticker por nombre..." oninput="filtrarMedia('sticker')">
+                        <input type="text" id="media-search-sticker" class="search-control" placeholder="Buscar Sticker..." oninput="filtrarMedia('sticker')">
                     </div>
                     <div id="grid-container-gif" class="media-grid-container">
                         <div id="media-items-gif" class="media-grid"></div>
@@ -973,11 +1725,11 @@ HTML_TEMPLATE = """
                 </div>
 
                 <div class="controls-row">
-                    <button style="background: #2d2d2d; color: #ffc107; border: 1px solid #444; border-radius: 4px; padding: 0 15px; cursor: pointer; font-size: 18px; font-weight: bold;" onclick="toggleEmojiPicker(event)">😀</button>
-                    <button style="background: #2d2d2d; color: #0dcaf0; border: 1px solid #444; border-radius: 4px; padding: 0 15px; cursor: pointer; font-size: 16px; font-weight: bold;" onclick="toggleMediaModal(event)">🖼️</button>
+                    <button style="background: #2d2d2d; color: #ffc107; border: 1px solid #444; border-radius: 4px; padding: 0 12px; cursor: pointer; font-size: 16px; font-weight: bold;" onclick="toggleEmojiPicker(event)">😀</button>
+                    <button style="background: #2d2d2d; color: #0dcaf0; border: 1px solid #444; border-radius: 4px; padding: 0 12px; cursor: pointer; font-size: 14px; font-weight: bold;" onclick="toggleMediaModal(event)">🖼️</button>
                     
-                    <input type="text" id="message-input" class="input-control flex-grow" placeholder="Escribí un mensaje..." onkeypress="if(event.key==='Enter') enviarMensaje()">
-                    <button style="background: #198754; color: white; padding: 0 25px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;" onclick="enviarMensaje()">Enviar</button>
+                    <input type="text" id="message-input" class="input-control flex-grow" placeholder="Escribí un mensaje..." onkeypress="if(event.key==='Enter') enviarMensaje()" style="font-size: 14px; padding: 8px;">
+                    <button style="background: #198754; color: white; padding: 0 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px;" onclick="enviarMensaje()">Enviar</button>
                 </div>
             </div>
 
@@ -987,7 +1739,7 @@ HTML_TEMPLATE = """
 
             <div class="side-users" id="side-panel-users">
                 <div class="side-users-inner">
-                    <h4 style="margin-top: 0; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 5px;">Conectados</h4>
+                    <h4 style="margin-top: 0; margin-bottom: 8px; border-bottom: 1px solid #333; padding-bottom: 4px; font-size: 14px;">Conectados</h4>
                     <div id="lista-usuarios"></div>
                 </div>
             </div>
@@ -995,82 +1747,82 @@ HTML_TEMPLATE = """
     </div>
 
     <div id="avatar-upload-modal" class="avatar-upload-modal">
-        <h4 style="margin-top: 0; margin-bottom: 10px; text-align: center; color: #0dcaf0;">Configurar mi Avatar</h4>
+        <h4 style="margin-top: 0; margin-bottom: 8px; text-align: center; color: #0dcaf0; font-size: 16px;">Configurar mi Avatar</h4>
         <div class="form-group">
-            <input type="file" id="avatar-file-input" accept="image/*" class="input-control" onchange="procesarArchivoLocalAvatar()">
+            <input type="file" id="avatar-file-input" accept="image/*" class="input-control" onchange="procesarArchivoLocalAvatar()" style="padding: 6px;">
         </div>
         <div class="form-group">
-            <input type="text" id="avatar-url-input" class="search-control" placeholder="Pegar URL de imagen..." oninput="vistaPreviaAvatarUrl()">
+            <input type="text" id="avatar-url-input" class="search-control" placeholder="Pegar URL de imagen..." oninput="vistaPreviaAvatarUrl()" style="font-size: 12px;">
         </div>
         <div>
             <img id="avatar-preview-img" src="" class="avatar-preview-box">
         </div>
-        <div style="display: flex; gap: 10px; margin-top: 15px;">
-            <button style="flex: 1; background: #2d2d2d; color: white; border: 1px solid #444; padding: 8px; border-radius: 4px;" onclick="cerrarModalAvatar()">Cancelar</button>
-            <button style="flex: 1; background: #198754; color: white; border: none; padding: 8px; border-radius: 4px; font-weight: bold;" onclick="guardarAvatarPropio()">Guardar</button>
+        <div style="display: flex; gap: 8px; margin-top: 10px;">
+            <button style="flex: 1; background: #2d2d2d; color: white; border: 1px solid #444; padding: 6px; border-radius: 4px; font-size: 12px;" onclick="cerrarModalAvatar()">Cancelar</button>
+            <button style="flex: 1; background: #198754; color: white; border: none; padding: 6px; border-radius: 4px; font-weight: bold; font-size: 12px;" onclick="guardarAvatarPropio()">Guardar</button>
         </div>
     </div>
 
     <div id="admin-section" class="d-none">
         <div class="admin-box">
             <div class="admin-nav">
-                <h2 style="margin: 0;">Panel de Control General</h2>
-                <div>
-                    <button id="btn-admin-view-chat" style="background: #0d6efd; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-right: 10px;" onclick="irAlLobbyDesdePanel()">Ir a las salas</button>
-                    <button style="background: #dc3545; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;" onclick="location.reload()">Cerrar Sesión</button>
+                <h2 style="margin: 0; font-size: 16px;">Panel de Control</h2>
+                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                    <button id="btn-admin-view-chat" style="background: #0d6efd; color: white; padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 11px;" onclick="irAlLobbyDesdePanel()">Salas</button>
+                    <button style="background: #dc3545; color: white; padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;" onclick="location.reload()">Cerrar</button>
                 </div>
             </div>
 
             <div class="tabs-header">
-                <button id="admin-tab-users" class="tab-btn active" onclick="switchAdminTab('users')">Gestionar Usuarios</button>
-                <button id="admin-tab-rooms" class="tab-btn" onclick="switchAdminTab('rooms')">Gestionar Salas de Chat</button>
-                <button id="admin-tab-stickers" class="tab-btn" onclick="switchAdminTab('stickers')">Gestionar GIFs y Stickers</button>
-                <button id="admin-tab-connection" class="tab-btn" style="color:#0dcaf0;" onclick="switchAdminTab('connection')">🔌 Conexión DB</button>
+                <button id="admin-tab-users" class="tab-btn active" onclick="switchAdminTab('users')">Usuarios</button>
+                <button id="admin-tab-rooms" class="tab-btn" onclick="switchAdminTab('rooms')">Salas</button>
+                <button id="admin-tab-stickers" class="tab-btn" onclick="switchAdminTab('stickers')">GIFs/Stickers</button>
+                <button id="admin-tab-connection" class="tab-btn" style="color:#0dcaf0;" onclick="switchAdminTab('connection')">🔌 DB</button>
             </div>
 
             <div id="admin-panel-users">
                 <button id="btn-toggle-visibilidad" class="btn-visibilidad" onclick="cambiarVisibilidadAdminWeb()">Cargando Modo...</button>
-                <div id="admin-current-room-status" style="margin-bottom: 15px; color: #0dcaf0; font-weight: bold; font-size: 14px;">
+                <div id="admin-current-room-status" style="margin-bottom: 10px; color: #0dcaf0; font-weight: bold; font-size: 12px;">
                     Posición actual del Administrador: <span id="admin-room-label" style="color: #ffc107;">Fuera de las salas</span>
                 </div>
 
-                <h3>Crear Usuario Nuevo</h3>
-                <div class="form-inline-admin" style="margin-bottom: 25px;">
-                    <div style="flex: 1; min-width: 140px;">
-                        <input type="text" id="adm-u-name" class="input-control" placeholder="Nombre">
+                <h3 style="font-size: 14px;">Crear Usuario Nuevo</h3>
+                <div class="form-inline-admin" style="margin-bottom: 15px;">
+                    <div style="flex: 1; min-width: 100px;">
+                        <input type="text" id="adm-u-name" class="input-control" placeholder="Nombre" style="font-size: 12px; padding: 6px;">
                     </div>
-                    <div style="flex: 1; min-width: 140px;">
-                        <input type="text" id="adm-u-pass" class="input-control" placeholder="Contraseña">
+                    <div style="flex: 1; min-width: 100px;">
+                        <input type="text" id="adm-u-pass" class="input-control" placeholder="Contraseña" style="font-size: 12px; padding: 6px;">
                     </div>
-                    <div style="flex: 1; min-width: 120px;">
-                        <select id="adm-u-rol" class="input-control">
+                    <div style="flex: 1; min-width: 80px;">
+                        <select id="adm-u-rol" class="input-control" style="font-size: 12px; padding: 6px;">
                             <option value="user">User</option>
                             <option value="mod">Mod</option>
                             <option value="admin">Admin</option>
                         </select>
                     </div>
-                    <div style="flex: 1; min-width: 120px;">
-                        <select id="adm-u-gender" class="input-control">
+                    <div style="flex: 1; min-width: 80px;">
+                        <select id="adm-u-gender" class="input-control" style="font-size: 12px; padding: 6px;">
                             <option value="hombre">Hombre</option>
                             <option value="mujer">Mujer</option>
                         </select>
                     </div>
-                    <button style="background: #198754; color: white; border:none; padding:10px 20px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="crearUsuarioDesdeAdmin()">Agregar</button>
+                    <button style="background: #198754; color: white; border:none; padding:6px 12px; border-radius:4px; font-weight:bold; cursor:pointer; font-size:12px;" onclick="crearUsuarioDesdeAdmin()">Agregar</button>
                 </div>
 
-                <h3>Listado de Cuentas del Servidor</h3>
+                <h3 style="font-size: 14px;">Listado de Cuentas</h3>
                 <div style="width: 100%; overflow-x: auto;">
                     <table>
                         <thead>
                             <tr>
                                 <th>Red</th>
                                 <th>ID</th>
-                                <th>Editar Nick (Username)</th>
-                                <th>Editar Contraseña</th>
-                                <th>Rango / Rol</th>
-                                <th>Estado Mod</th>
+                                <th>Nick</th>
+                                <th>Pass</th>
+                                <th>Rol</th>
+                                <th>Estado</th>
                                 <th>Género</th>
-                                <th style="min-width: 320px;">Acciones de Moderación Temporal / Permanente</th>
+                                <th style="min-width: 250px;">Acciones</th>
                             </tr>
                         </thead>
                         <tbody id="tabla-adm-usuarios"></tbody>
@@ -1079,32 +1831,32 @@ HTML_TEMPLATE = """
             </div>
 
             <div id="admin-panel-rooms" class="d-none">
-                <h3>Crear Nueva Sala de Chat</h3>
-                <div class="form-inline-admin" style="margin-bottom: 25px;">
-                    <div style="flex: 2; min-width: 180px;">
-                        <label style="font-size:12px; color:#aaa; display:block; margin-bottom:2px;">Nombre de Sala:</label>
-                        <input type="text" id="adm-r-name" class="input-control" placeholder="Ej: Sala de Juegos">
+                <h3 style="font-size: 14px;">Crear Nueva Sala</h3>
+                <div class="form-inline-admin" style="margin-bottom: 15px;">
+                    <div style="flex: 2; min-width: 120px;">
+                        <label style="font-size:10px; color:#aaa; display:block; margin-bottom:2px;">Nombre:</label>
+                        <input type="text" id="adm-r-name" class="input-control" placeholder="Sala de Juegos" style="font-size: 12px; padding: 6px;">
                     </div>
-                    <div style="flex: 1; min-width: 90px;">
-                        <label style="font-size:12px; color:#aaa; display:block; margin-bottom:2px;">Ícono (Emoji):</label>
-                        <input type="text" id="adm-r-icon" class="input-control" placeholder="🎮" maxlength="4">
+                    <div style="flex: 1; min-width: 60px;">
+                        <label style="font-size:10px; color:#aaa; display:block; margin-bottom:2px;">Ícono:</label>
+                        <input type="text" id="adm-r-icon" class="input-control" placeholder="🎮" maxlength="4" style="font-size: 12px; padding: 6px;">
                     </div>
-                    <div style="flex: 1; min-width: 140px;">
-                        <label style="font-size:12px; color:#aaa; display:block; margin-bottom:2px;">Límite Usuarios (Máx 150):</label>
-                        <input type="number" id="adm-r-limit" class="input-control" value="150" min="1" max="150">
+                    <div style="flex: 1; min-width: 80px;">
+                        <label style="font-size:10px; color:#aaa; display:block; margin-bottom:2px;">Límite:</label>
+                        <input type="number" id="adm-r-limit" class="input-control" value="150" min="1" max="150" style="font-size: 12px; padding: 6px;">
                     </div>
-                    <button style="background: #198754; color: white; border:none; padding:10px 20px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="crearSalaDesdeAdmin()">Crear Sala</button>
+                    <button style="background: #198754; color: white; border:none; padding:6px 12px; border-radius:4px; font-weight:bold; cursor:pointer; font-size:12px;" onclick="crearSalaDesdeAdmin()">Crear</button>
                 </div>
 
-                <h3>Salas de Chat Registradas</h3>
+                <h3 style="font-size: 14px;">Salas Registradas</h3>
                 <div style="width: 100%; overflow-x: auto;">
                     <table>
                         <thead>
                             <tr>
                                 <th>ID</th>
                                 <th>Ícono</th>
-                                <th>Nombre de Sala</th>
-                                <th>Límite de Capacidad</th>
+                                <th>Nombre</th>
+                                <th>Límite</th>
                                 <th>Operaciones</th>
                             </tr>
                         </thead>
@@ -1114,32 +1866,32 @@ HTML_TEMPLATE = """
             </div>
 
             <div id="admin-panel-stickers" class="d-none">
-                <h3>Añadir Nuevo Contenido Multimedia</h3>
-                <div class="form-inline-admin" style="margin-bottom: 25px;">
-                    <div style="flex: 1; min-width: 150px;">
-                        <input type="text" id="adm-s-name" class="input-control" placeholder="Ej: Messi saludo">
+                <h3 style="font-size: 14px;">Añadir Contenido Multimedia</h3>
+                <div class="form-inline-admin" style="margin-bottom: 15px;">
+                    <div style="flex: 1; min-width: 100px;">
+                        <input type="text" id="adm-s-name" class="input-control" placeholder="Nombre" style="font-size: 12px; padding: 6px;">
                     </div>
-                    <div style="flex: 2; min-width: 220px;">
-                        <input type="text" id="adm-s-url" class="input-control" placeholder="https://.../imagen.gif">
+                    <div style="flex: 2; min-width: 150px;">
+                        <input type="text" id="adm-s-url" class="input-control" placeholder="https://.../imagen.gif" style="font-size: 12px; padding: 6px;">
                     </div>
-                    <div style="flex: 1; min-width: 130px;">
-                        <select id="adm-s-tipo" class="input-control">
+                    <div style="flex: 1; min-width: 80px;">
+                        <select id="adm-s-tipo" class="input-control" style="font-size: 12px; padding: 6px;">
                             <option value="sticker">Sticker</option>
                             <option value="gif">GIF</option>
                         </select>
                     </div>
-                    <button style="background: #198754; color: white; border:none; padding:10px 20px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="crearStickerDesdeAdmin()">Guardar Item</button>
+                    <button style="background: #198754; color: white; border:none; padding:6px 12px; border-radius:4px; font-weight:bold; cursor:pointer; font-size:12px;" onclick="crearStickerDesdeAdmin()">Guardar</button>
                 </div>
 
-                <h3>Galería de Elementos Registrados</h3>
+                <h3 style="font-size: 14px;">Galería de Elementos</h3>
                 <table>
                     <thead>
                         <tr>
                             <th>ID</th>
                             <th>Nombre</th>
                             <th>Tipo</th>
-                            <th>Previsualización</th>
-                            <th>URL Absoluta</th>
+                            <th>Preview</th>
+                            <th>URL</th>
                             <th>Operación</th>
                         </tr>
                     </thead>
@@ -1148,53 +1900,53 @@ HTML_TEMPLATE = """
             </div>
 
             <div id="admin-panel-connection" class="d-none">
-                <h3>Conectividad del Servidor de Base de Datos</h3>
-                <p style="color: #aaa; font-size: 14px; max-width: 700px;">
-                    Podés configurar este sistema para que corra de modo <strong>Local</strong> (guardando todo en el archivo local de la PC) o de modo <strong>Online</strong> (conectándose en la nube mediante un servidor remoto PostgreSQL como Supabase, Render o Railway).
+                <h3 style="font-size: 14px;">Conectividad del Servidor de Base de Datos</h3>
+                <p style="color: #aaa; font-size: 12px; max-width: 700px;">
+                    Configurar motor: <strong>Local</strong> (SQLite) o <strong>Online</strong> (PostgreSQL en la nube).
                 </p>
 
                 <div id="db-status-container" class="db-status-banner status-local-mode">
-                    <div>Estado Actual: <span id="lbl-motor-actual">SQLITE LOCAL</span></div>
+                    <div>Estado: <span id="lbl-motor-actual">SQLITE LOCAL</span></div>
                 </div>
 
                 <div class="form-db-config">
                     <div class="form-group">
-                        <label>Seleccionar Motor Activo:</label>
-                        <select id="cfg-db-motor" class="input-control" onchange="alternarVisibilidadCamposNube()">
-                            <option value="sqlite">Local (SQLite - Archivo Interno)</option>
-                            <option value="postgres">Online Remoto (PostgreSQL - Servidor en la nube)</option>
+                        <label style="font-size:12px;">Seleccionar Motor:</label>
+                        <select id="cfg-db-motor" class="input-control" onchange="alternarVisibilidadCamposNube()" style="font-size: 12px; padding: 6px;">
+                            <option value="sqlite">Local (SQLite)</option>
+                            <option value="postgres">Online (PostgreSQL)</option>
                         </select>
                     </div>
 
                     <div id="panel-campos-nube" class="d-none">
                         <div class="form-group">
-                            <label>Host Remoto (Servidor / Endpoint):</label>
-                            <input type="text" id="cfg-db-host" class="input-control" placeholder="ej: aws-0-us-east-1.pooler.supabase.com">
+                            <label style="font-size:12px;">Host Remoto:</label>
+                            <input type="text" id="cfg-db-host" class="input-control" placeholder="ej: aws-0-us-east-1.pooler.supabase.com" style="font-size: 12px; padding: 6px;">
                         </div>
-                        <div style="display: flex; gap:10px;">
-                            <div class="form-group" style="flex:1;">
-                                <label>Base de Datos Name:</label>
-                                <input type="text" id="cfg-db-name" class="input-control" placeholder="postgres">
+                        <div style="display: flex; gap:8px; flex-wrap: wrap;">
+                            <div class="form-group" style="flex:1; min-width:80px;">
+                                <label style="font-size:12px;">Base de Datos:</label>
+                                <input type="text" id="cfg-db-name" class="input-control" placeholder="postgres" style="font-size: 12px; padding: 6px;">
                             </div>
-                            <div class="form-group" style="flex:1;">
-                                <label>Puerto (Port):</label>
-                                <input type="text" id="cfg-db-port" class="input-control" placeholder="5432" value="5432">
+                            <div class="form-group" style="flex:1; min-width:60px;">
+                                <label style="font-size:12px;">Puerto:</label>
+                                <input type="text" id="cfg-db-port" class="input-control" placeholder="5432" value="5432" style="font-size: 12px; padding: 6px;">
                             </div>
                         </div>
-                        <div style="display: flex; gap:10px;">
-                            <div class="form-group" style="flex:1;">
-                                <label>Usuario (User):</label>
-                                <input type="text" id="cfg-db-user" class="input-control" placeholder="postgres.tu_id">
+                        <div style="display: flex; gap:8px; flex-wrap: wrap;">
+                            <div class="form-group" style="flex:1; min-width:80px;">
+                                <label style="font-size:12px;">Usuario:</label>
+                                <input type="text" id="cfg-db-user" class="input-control" placeholder="postgres.tu_id" style="font-size: 12px; padding: 6px;">
                             </div>
-                            <div class="form-group" style="flex:1;">
-                                <label>Contraseña (Password):</label>
-                                <input type="password" id="cfg-db-pass" class="input-control" placeholder="Tu Contraseña de la Nube">
+                            <div class="form-group" style="flex:1; min-width:80px;">
+                                <label style="font-size:12px;">Contraseña:</label>
+                                <input type="password" id="cfg-db-pass" class="input-control" placeholder="Tu Contraseña" style="font-size: 12px; padding: 6px;">
                             </div>
                         </div>
                     </div>
 
-                    <button style="background: #0dcaf0; color: black; border: none; padding: 12px 25px; border-radius: 4px; font-weight: bold; cursor: pointer; margin-top: 10px;" onclick="guardarConfiguracionConexionMecanismo()">
-                        💾 Guardar y Aplicar Cambios
+                    <button style="background: #0dcaf0; color: black; border: none; padding: 8px 15px; border-radius: 4px; font-weight: bold; cursor: pointer; margin-top: 8px; font-size: 12px;" onclick="guardarConfiguracionConexionMecanismo()">
+                        💾 Guardar Cambios
                     </button>
                 </div>
             </div>
@@ -1348,8 +2100,41 @@ HTML_TEMPLATE = """
                 document.getElementById("btn-go-admin-lobby").classList.remove("d-none");
             }
 
-            socket = io();
-            socket.on('connect', function() { socket.emit('join_chat', { username: currentUser }); });
+            // ✅ Configurar Socket.IO con reconexión y fallback
+            socket = io({
+                reconnection: true,
+                reconnectionAttempts: 15,
+                reconnectionDelay: 1000,
+                reconnectionDelayMax: 5000,
+                transports: ['websocket', 'polling'],
+                timeout: 20000
+            });
+            
+            socket.on('connect', function() {
+                console.log('✅ Conectado al servidor Socket.IO');
+                socket.emit('join_chat', { username: currentUser });
+            });
+
+            socket.on('connect_error', function(error) {
+                console.error('❌ Error de conexión Socket.IO:', error);
+                // Intentar reconectar con polling si websocket falla
+                if (socket.io.opts.transports.indexOf('polling') === -1) {
+                    socket.io.opts.transports = ['polling', 'websocket'];
+                }
+            });
+
+            // ✅ Reconexión automática
+            socket.on('disconnect', function() {
+                console.log('⚠️ Desconectado del servidor. Reintentando...');
+            });
+
+            socket.on('reconnect', function() {
+                console.log('✅ Reconectado al servidor.');
+                socket.emit('join_chat', { username: currentUser });
+                if (currentSalaName) {
+                    socket.emit('cambiar_sala', { sala: currentSalaName });
+                }
+            });
 
             socket.on('cambiar_sala_ok', function(data) {
                 currentSalaName = data.sala;
@@ -1372,7 +2157,7 @@ HTML_TEMPLATE = """
             socket.on('sys_msg', function(data) {
                 let box = document.getElementById("chat-box");
                 let p = document.createElement("p");
-                p.style.color = "#888"; p.style.fontSize = "13px"; p.style.margin = "4px 0"; p.style.fontStyle = "italic";
+                p.style.color = "#888"; p.style.fontSize = "12px"; p.style.margin = "3px 0"; p.style.fontStyle = "italic";
                 p.innerText = data.texto;
                 box.appendChild(p);
                 box.scrollTop = box.scrollHeight;
@@ -1441,7 +2226,7 @@ HTML_TEMPLATE = """
                 asegurarVentanaPrivadoExistente(interlocutor);
                 let pBox = document.getElementById(`p-chat-box-${interlocutor}`);
                 if (pBox) {
-                    let d = document.createElement("div"); d.style.margin = "4px 0";
+                    let d = document.createElement("div"); d.style.margin = "3px 0";
                     d.innerHTML = `<strong style="color:${data.sender===currentUser?'#0dcaf0':'#ffc107'}">@${data.sender}:</strong> ${data.texto}`;
                     pBox.appendChild(d);
                     twemoji.parse(d, { folder: 'svg', ext: '.svg' });
@@ -1499,21 +2284,21 @@ HTML_TEMPLATE = """
         function renderizarListaUsuariosConectados(list) {
             let div = document.getElementById("lista-usuarios"); div.innerHTML = "";
             list.forEach(u => {
-                let row = document.createElement("div"); row.style.display = "flex"; row.style.alignItems = "center"; row.style.margin = "10px 0";
+                let row = document.createElement("div"); row.style.display = "flex"; row.style.alignItems = "center"; row.style.margin = "6px 0";
                 let dot = document.createElement("span"); dot.className = "status-dot dot-green"; row.appendChild(dot);
 
-                let av = document.createElement("div"); av.style.marginRight = "8px";
+                let av = document.createElement("div"); av.style.marginRight = "4px";
                 if (u.avatar) {
-                    av.innerHTML = `<img src="${u.avatar}" class="msg-avatar-img" style="width:26px; height:26px; margin:0;">`;
+                    av.innerHTML = `<img src="${u.avatar}" class="msg-avatar-img" style="width:20px; height:20px; margin:0;">`;
                 } else {
                     let col = u.genero === 'mujer' ? '#e91e63' : '#0d6efd';
                     let ini = u.username.substring(0,2).toUpperCase();
-                    av.innerHTML = `<span class="msg-avatar-initials" style="width:26px; height:26px; font-size:9px; background:${col}; margin:0;">${ini}</span>`;
+                    av.innerHTML = `<span class="msg-avatar-initials" style="width:20px; height:20px; font-size:8px; background:${col}; margin:0;">${ini}</span>`;
                 }
                 row.appendChild(av);
 
                 let nameSpan = document.createElement("span");
-                nameSpan.className = "clickable-nick"; nameSpan.style.fontSize = "14px"; nameSpan.style.fontWeight = "bold";
+                nameSpan.className = "clickable-nick"; nameSpan.style.fontSize = "12px"; nameSpan.style.fontWeight = "bold";
                 if (u.rol === 'admin') nameSpan.style.color = '#ffc107';
                 else if (u.rol === 'mod') nameSpan.style.color = '#0dcaf0';
                 else nameSpan.style.color = '#eee';
@@ -1542,6 +2327,11 @@ HTML_TEMPLATE = """
                 });
                 inp.value = "";
                 document.getElementById("emoji-mart-floating-picker").style.display = "none";
+            } else {
+                alert("No estás conectado al servidor. Reintentando conexión...");
+                if (socket) {
+                    socket.connect();
+                }
             }
         }
 
@@ -1610,7 +2400,7 @@ HTML_TEMPLATE = """
             if (document.getElementById(`private-win-${targetUser}`)) return;
             let win = document.createElement("div"); win.id = `private-win-${targetUser}`; win.className = "private-chat-window";
             let total = document.querySelectorAll(".private-chat-window").length;
-            win.style.right = (310 + (total * 340)) + "px";
+            win.style.right = (10 + (total * 290)) + "px";
             
             win.innerHTML = `
                 <div class="private-chat-header" onmousedown="iniciarArrastreVentana(event, 'private-win-${targetUser}')">
@@ -1672,14 +2462,59 @@ HTML_TEMPLATE = """
         function procesarArchivoLocalAvatar() {
             let fi = document.getElementById("avatar-file-input");
             if(fi.files && fi.files[0]) {
-                let r = new FileReader(); r.onload = function(e) { document.getElementById("avatar-preview-img").src = e.target.result; }; r.readAsDataURL(fi.files[0]);
+                // ✅ Validar tamaño del archivo antes de cargarlo
+                if (fi.files[0].size > 2 * 1024 * 1024) {
+                    alert("❌ La imagen es demasiado grande (más de 2MB). Por favor, usá una imagen más pequeña.");
+                    fi.value = "";
+                    return;
+                }
+                let r = new FileReader(); 
+                r.onload = function(e) { 
+                    document.getElementById("avatar-preview-img").src = e.target.result; 
+                }; 
+                r.readAsDataURL(fi.files[0]);
             }
         }
+        
         function guardarAvatarPropio() {
             let src = document.getElementById("avatar-preview-img").src;
+            
+            // ✅ Validar que la imagen no sea demasiado grande
+            if (src.length > 2 * 1024 * 1024) {
+                alert("❌ La imagen es demasiado grande (más de 2MB). Usá una imagen más pequeña.");
+                return;
+            }
+            
+            // ✅ Mostrar mensaje de "cargando"
+            let btnGuardar = document.querySelector("#avatar-upload-modal button[onclick='guardarAvatarPropio()']");
+            let textoOriginal = btnGuardar.innerText;
+            btnGuardar.innerText = "⏳ Guardando...";
+            btnGuardar.disabled = true;
+            
             fetch('/api/usuario/actualizar_avatar', {
-                method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username: currentUser, avatar: src })
-            }).then(() => { currentAvatar = src; renderizarSlotAvatarCabecera(); cerrarModalAvatar(); });
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ username: currentUser, avatar: src })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    currentAvatar = src;
+                    renderizarSlotAvatarCabecera();
+                    cerrarModalAvatar();
+                    alert("✅ Avatar actualizado correctamente.");
+                } else {
+                    alert("❌ " + (data.message || "Error al guardar el avatar."));
+                }
+            })
+            .catch(err => {
+                alert("❌ Error de conexión al guardar el avatar. Verificá tu conexión a internet.");
+                console.error("Error al guardar avatar:", err);
+            })
+            .finally(() => {
+                btnGuardar.innerText = textoOriginal;
+                btnGuardar.disabled = false;
+            });
         }
 
         // --- NAVEGACIÓN PANEL ADMIN ---
@@ -1741,26 +2576,26 @@ HTML_TEMPLATE = """
                                 <td><span class="badge">${u.estado}</span></td>
                                 <td>${u.genero}</td>
                                 <td>
-                                    <button class="btn-sm" style="background:#198754; color:white; margin-bottom: 5px;" onclick="guardarCambiosCredencialesAdmin(${u.id})">💾 Guardar</button>
-                                    <button class="btn-sm" style="background:#212529; color:#ffc107;" onclick="eliminarUsuarioAdmin('${u.username}')" ${buttonsDisabled}>Eliminar</button>
-                                    <hr style="border: 0; border-top: 1px solid #333; margin: 6px 0;">
+                                    <button class="btn-sm" style="background:#198754; color:white; margin-bottom: 3px;" onclick="guardarCambiosCredencialesAdmin(${u.id})">💾</button>
+                                    <button class="btn-sm" style="background:#212529; color:#ffc107;" onclick="eliminarUsuarioAdmin('${u.username}')" ${buttonsDisabled}>✖</button>
+                                    <hr style="border: 0; border-top: 1px solid #333; margin: 4px 0;">
                                     <div class="admin-action-container">
                                         <select id="time-silenciar-${u.id}" class="admin-time-select" ${buttonsDisabled}>
-                                            <option value="10">10 Minutos</option><option value="30">30 Minutos</option><option value="60">1 Hora</option><option value="perm">Permanente</option>
+                                            <option value="10">10m</option><option value="30">30m</option><option value="60">1h</option><option value="perm">Perm</option>
                                         </select>
-                                        <button class="btn-sm" style="background:#ffc107; color:black;" onclick="ejecutarAccionTemporal('${u.username}', 'silenciar', ${u.id})" ${buttonsDisabled}>Silenciar</button>
+                                        <button class="btn-sm" style="background:#ffc107; color:black;" onclick="ejecutarAccionTemporal('${u.username}', 'silenciar', ${u.id})" ${buttonsDisabled}>🔇</button>
                                     </div>
                                     <div class="admin-action-container">
                                         <select id="time-ban-${u.id}" class="admin-time-select" ${buttonsDisabled}>
-                                            <option value="10">10 Minutos</option><option value="30">30 Minutos</option><option value="60">1 Hora</option><option value="perm" selected>Permanente</option>
+                                            <option value="10">10m</option><option value="30">30m</option><option value="60">1h</option><option value="perm" selected>Perm</option>
                                         </select>
-                                        <button class="btn-sm" style="background:#dc3545; color:white;" onclick="ejecutarAccionTemporal('${u.username}', 'ban', ${u.id})" ${buttonsDisabled}>Banear</button>
+                                        <button class="btn-sm" style="background:#dc3545; color:white;" onclick="ejecutarAccionTemporal('${u.username}', 'ban', ${u.id})" ${buttonsDisabled}>⛔</button>
                                     </div>
                                     <div class="admin-action-container">
                                         <select id="time-patear-${u.id}" class="admin-time-select" ${buttonsDisabled}>
-                                            <option value="10">10 Minutos</option><option value="30">30 Minutos</option><option value="60">1 Hora</option><option value="perm">Permanente</option>
+                                            <option value="10">10m</option><option value="30">30m</option><option value="60">1h</option><option value="perm">Perm</option>
                                         </select>
-                                        <button class="btn-sm" style="background:#6f42c1; color:white;" onclick="ejecutarPatearSalaTemporal('${u.username}', ${u.id})" ${buttonsDisabled}>Patear de Sala</button>
+                                        <button class="btn-sm" style="background:#6f42c1; color:white;" onclick="ejecutarPatearSalaTemporal('${u.username}', ${u.id})" ${buttonsDisabled}>👢</button>
                                     </div>
                                 </td>
                             `;
@@ -1776,17 +2611,17 @@ HTML_TEMPLATE = """
             fetch('/api/admin/cambiar_estado', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username: username, accion: accion, tiempo: tiempo })
-            }).then(() => { alert(`Acción ejecutada.`); cargarTablaUsuariosAdmin(); });
+            }).then(() => { alert(`✅ Acción ejecutada.`); cargarTablaUsuariosAdmin(); });
         }
 
         function ejecutarPatearSalaTemporal(username, userId) {
-            if (!adminRoomPos) { alert("No podés patear usuarios porque no estás dentro de ninguna sala."); return; }
+            if (!adminRoomPos) { alert("❌ No podés patear usuarios porque no estás dentro de ninguna sala."); return; }
             let tiempo = document.getElementById(`time-patear-${userId}`).value;
-            if (confirm(`¿Patear a @${username}?`)) {
+            if (confirm(`¿Patear a @${username} de la sala ${adminRoomPos}?`)) {
                 fetch('/api/admin/cambiar_estado', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username: username, accion: 'patear_sala', tiempo: tiempo, sala_admin: adminRoomPos })
-                }).then(() => { alert("Pateado."); cargarTablaUsuariosAdmin(); });
+                }).then(() => { alert("✅ Pateado."); cargarTablaUsuariosAdmin(); });
             }
         }
 
@@ -1835,7 +2670,7 @@ HTML_TEMPLATE = """
                 let tbody = document.getElementById("tabla-adm-salas"); tbody.innerHTML = "";
                 salas.forEach(s => {
                     let tr = document.createElement("tr");
-                    tr.innerHTML = `<td>${s.id}</td><td>${s.icono}</td><td><strong>${s.nombre}</strong></td><td>${s.limite}</td><td><button class="btn-sm" style="background:#dc3545; color:white;" onclick="eliminarSalaAdmin(${s.id})">Eliminar</button></td>`;
+                    tr.innerHTML = `<td>${s.id}</td><td>${s.icono}</td><td><strong>${s.nombre}</strong></td><td>${s.limite}</td><td><button class="btn-sm" style="background:#dc3545; color:white;" onclick="eliminarSalaAdmin(${s.id})">✖</button></td>`;
                     tbody.appendChild(tr);
                 });
             });
@@ -1845,6 +2680,7 @@ HTML_TEMPLATE = """
             let nombre = document.getElementById("adm-r-name").value.trim();
             let icono = document.getElementById("adm-r-icon").value.trim();
             let limite = document.getElementById("adm-r-limit").value;
+            if(!nombre) { alert("El nombre de la sala es obligatorio."); return; }
             fetch('/api/admin/crear_sala', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ nombre: nombre, icono: icono, limite: limite })
@@ -1864,7 +2700,7 @@ HTML_TEMPLATE = """
                 if(data) {
                     data.forEach(s => {
                         let tr = document.createElement("tr");
-                        tr.innerHTML = `<td>${s.id}</td><td>${s.nombre}</td><td>${s.tipo}</td><td><img src="${s.url}" class="admin-sticker-preview"></td><td>${s.url}</td><td><button class="btn-sm" style="background:#dc3545; color:white;" onclick="eliminarStickerAdmin(${s.id})">Quitar</button></td>`;
+                        tr.innerHTML = `<td>${s.id}</td><td>${s.nombre}</td><td>${s.tipo}</td><td><img src="${s.url}" class="admin-sticker-preview"></td><td style="font-size:10px; max-width:80px; overflow:hidden; text-overflow:ellipsis;">${s.url}</td><td><button class="btn-sm" style="background:#dc3545; color:white;" onclick="eliminarStickerAdmin(${s.id})">✖</button></td>`;
                         tbody.appendChild(tr);
                     });
                 }
@@ -1875,6 +2711,7 @@ HTML_TEMPLATE = """
             let nom = document.getElementById("adm-s-name").value.trim();
             let url = document.getElementById("adm-s-url").value.trim();
             let tipo = document.getElementById("adm-s-tipo").value;
+            if(!nom || !url) { alert("Nombre y URL son obligatorios."); return; }
             fetch('/api/admin/crear_sticker', {
                 method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ nombre: nom, url: url, tipo: tipo })
             }).then(() => { cargarTablaStickersAdmin(); });
@@ -1937,9 +2774,9 @@ HTML_TEMPLATE = """
             .then(r => r.json())
             .then(data => {
                 if(data.success) {
-                    alert("Configuración guardada y base de datos sincronizada de forma exitosa.");
+                    alert("✅ Configuración guardada y base de datos sincronizada de forma exitosa.");
                 } else {
-                    alert("Error: " + data.message);
+                    alert("❌ Error: " + data.message);
                 }
                 solicitarYRenderizarConfigDBAdmin();
                 cargarTablaUsuariosAdmin();
