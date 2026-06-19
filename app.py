@@ -2,6 +2,7 @@ import os
 import json
 import sqlite3
 import datetime
+import re
 from flask import Flask, render_template_string, request, jsonify
 from flask_socketio import SocketIO, emit, join_room, leave_room
 
@@ -16,9 +17,8 @@ except ImportError:
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secreto123!'
 
-# ✅ Aumentar límite de tamaño de solicitud (hasta 10MB para imágenes)
+# ✅ Aumentar límite de tamaño de solicitud
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10 MB
-app.config['MAX_IMAGE_SIZE'] = 2 * 1024 * 1024  # 2 MB máximo para imágenes
 
 # === CONFIGURACIÓN MEJORADA PARA RENDER Y PYTHON 3.14.3 ===
 if 'GUNICORN_CMD_ARGS' in os.environ or 'RENDER' in os.environ:
@@ -238,6 +238,14 @@ def calcular_fecha_expiracion(minutos_str):
     mins = int(minutos_str)
     return (datetime.datetime.now() + datetime.timedelta(minutes=mins)).isoformat()
 
+# ✅ Función para validar URL de imagen
+def validar_url_imagen(url):
+    if not url:
+        return False
+    # Expresión regular para validar URL de imagen
+    patron = r'^(https?:\/\/.*\.(?:png|jpg|jpeg|gif|bmp|webp|svg))(?:\?.*)?$'
+    return re.match(patron, url, re.IGNORECASE) is not None
+
 # ==========================================
 # 2. ENDPOINTS HTTP Y API REST
 # ==========================================
@@ -287,9 +295,13 @@ def api_actualizar_avatar():
     user = data.get("username", "").strip()
     avatar = data.get("avatar", "")
     
-    # ✅ Validar que el avatar no sea demasiado grande (máximo 2MB)
-    if avatar and len(avatar) > 2 * 1024 * 1024:  # 2 MB
-        return jsonify({"success": False, "message": "La imagen es demasiado grande. Máximo 2MB."})
+    # ✅ Validar que sea una URL válida de imagen
+    if avatar and not validar_url_imagen(avatar):
+        return jsonify({"success": False, "message": "La URL debe ser una imagen válida (png, jpg, jpeg, gif, bmp, webp, svg)."})
+    
+    # ✅ Limitar longitud de la URL
+    if len(avatar) > 500:
+        return jsonify({"success": False, "message": "La URL es demasiado larga (máximo 500 caracteres)."})
     
     db_query("UPDATE usuarios SET avatar=? WHERE username=?", (avatar, user), commit=True)
     return jsonify({"success": True})
@@ -1359,20 +1371,21 @@ HTML_TEMPLATE = """
         </div>
     </div>
 
+    <!-- ✅ MODAL DE AVATAR - SOLO URL, SIN SUBIR ARCHIVO -->
     <div id="avatar-upload-modal" class="avatar-upload-modal">
         <h4 style="margin-top: 0; margin-bottom: 10px; text-align: center; color: #0dcaf0;">Configurar mi Avatar</h4>
         <div class="form-group">
-            <input type="file" id="avatar-file-input" accept="image/*" class="input-control" onchange="procesarArchivoLocalAvatar()">
+            <label style="font-size: 12px; color: #aaa;">Pegá la URL de tu imagen:</label>
+            <input type="text" id="avatar-url-input" class="input-control" placeholder="https://ejemplo.com/mi-avatar.png" oninput="vistaPreviaAvatarUrl()" style="font-size: 14px;">
+            <small style="color: #666; font-size: 11px; display: block; margin-top: 4px;">Formatos: PNG, JPG, JPEG, GIF, BMP, WEBP, SVG</small>
         </div>
-        <div class="form-group">
-            <input type="text" id="avatar-url-input" class="search-control" placeholder="Pegar URL de imagen..." oninput="vistaPreviaAvatarUrl()">
-        </div>
-        <div>
-            <img id="avatar-preview-img" src="" class="avatar-preview-box">
+        <div style="text-align: center;">
+            <img id="avatar-preview-img" src="" class="avatar-preview-box" style="display: none;">
+            <p id="avatar-preview-text" style="color: #666; font-size: 13px;">Pegá una URL para ver la previsualización</p>
         </div>
         <div style="display: flex; gap: 10px; margin-top: 15px;">
-            <button style="flex: 1; background: #2d2d2d; color: white; border: 1px solid #444; padding: 8px; border-radius: 4px;" onclick="cerrarModalAvatar()">Cancelar</button>
-            <button style="flex: 1; background: #198754; color: white; border: none; padding: 8px; border-radius: 4px; font-weight: bold;" onclick="guardarAvatarPropio()">Guardar</button>
+            <button style="flex: 1; background: #2d2d2d; color: white; border: 1px solid #444; padding: 8px; border-radius: 4px; cursor: pointer;" onclick="cerrarModalAvatar()">Cancelar</button>
+            <button style="flex: 1; background: #198754; color: white; border: none; padding: 8px; border-radius: 4px; font-weight: bold; cursor: pointer;" onclick="guardarAvatarPropio()">Guardar</button>
         </div>
     </div>
 
@@ -1603,11 +1616,9 @@ HTML_TEMPLATE = """
             }
 
             if (esCelular()) {
-                // Mostrar header móvil
                 const mobileHeader = document.getElementById('mobile-header');
                 if (mobileHeader) mobileHeader.style.display = 'block';
                 
-                // Botón para mostrar/ocultar usuarios en móvil
                 const toggleUsersBtn = document.getElementById('mobile-toggle-users');
                 if (toggleUsersBtn) {
                     toggleUsersBtn.addEventListener('click', function() {
@@ -1618,7 +1629,6 @@ HTML_TEMPLATE = """
                     });
                 }
                 
-                // Botón para volver al lobby en móvil
                 const backLobbyBtn = document.getElementById('mobile-back-lobby');
                 if (backLobbyBtn) {
                     backLobbyBtn.addEventListener('click', function() {
@@ -2110,32 +2120,61 @@ HTML_TEMPLATE = """
         }
 
         function abrirModalAvatar(e) {
-            e.stopPropagation(); document.getElementById("profile-dropdown").style.display = 'none';
+            e.stopPropagation(); 
+            document.getElementById("profile-dropdown").style.display = 'none';
             document.getElementById("avatar-upload-modal").style.display = 'block';
+            document.getElementById("avatar-preview-img").style.display = 'none';
+            document.getElementById("avatar-preview-text").style.display = 'block';
         }
-        function cerrarModalAvatar() { document.getElementById("avatar-upload-modal").style.display = 'none'; }
-        function vistaPreviaAvatarUrl() { document.getElementById("avatar-preview-img").src = document.getElementById("avatar-url-input").value; }
-        function procesarArchivoLocalAvatar() {
-            let fi = document.getElementById("avatar-file-input");
-            if(fi.files && fi.files[0]) {
-                if (fi.files[0].size > 2 * 1024 * 1024) {
-                    alert("❌ La imagen es demasiado grande (más de 2MB). Por favor, usá una imagen más pequeña.");
-                    fi.value = "";
-                    return;
-                }
-                let r = new FileReader(); 
-                r.onload = function(e) { 
-                    document.getElementById("avatar-preview-img").src = e.target.result; 
-                }; 
-                r.readAsDataURL(fi.files[0]);
+        function cerrarModalAvatar() { 
+            document.getElementById("avatar-upload-modal").style.display = 'none'; 
+        }
+        
+        function vistaPreviaAvatarUrl() {
+            let url = document.getElementById("avatar-url-input").value.trim();
+            let previewImg = document.getElementById("avatar-preview-img");
+            let previewText = document.getElementById("avatar-preview-text");
+            
+            if (url) {
+                previewImg.src = url;
+                previewImg.style.display = 'block';
+                previewText.style.display = 'none';
+                previewImg.onerror = function() {
+                    previewImg.style.display = 'none';
+                    previewText.style.display = 'block';
+                    previewText.textContent = '❌ La URL no es válida o la imagen no se pudo cargar';
+                    previewText.style.color = '#dc3545';
+                };
+                previewImg.onload = function() {
+                    previewText.style.display = 'none';
+                    previewImg.style.display = 'block';
+                };
+            } else {
+                previewImg.style.display = 'none';
+                previewText.style.display = 'block';
+                previewText.textContent = 'Pegá una URL para ver la previsualización';
+                previewText.style.color = '#666';
             }
         }
         
         function guardarAvatarPropio() {
-            let src = document.getElementById("avatar-preview-img").src;
+            let url = document.getElementById("avatar-url-input").value.trim();
             
-            if (src.length > 2 * 1024 * 1024) {
-                alert("❌ La imagen es demasiado grande (más de 2MB). Usá una imagen más pequeña.");
+            if (!url) {
+                alert("❌ Por favor, ingresá una URL de imagen.");
+                return;
+            }
+            
+            // Validar formato de URL de imagen
+            var patron = /^(https?:\/\/.*\.(?:png|jpg|jpeg|gif|bmp|webp|svg))(?:\?.*)?$/i;
+            if (!patron.test(url)) {
+                alert("❌ La URL debe ser una imagen válida. Formatos: PNG, JPG, JPEG, GIF, BMP, WEBP, SVG");
+                return;
+            }
+            
+            // Validar longitud
+            if (url.length > 500) {
+                alert("❌ La URL es demasiado larga (máximo 500 caracteres).");
                 return;
             }
             
@@ -2147,12 +2186,12 @@ HTML_TEMPLATE = """
             fetch('/api/usuario/actualizar_avatar', {
                 method:'POST',
                 headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({ username: currentUser, avatar: src })
+                body: JSON.stringify({ username: currentUser, avatar: url })
             })
             .then(r => r.json())
             .then(data => {
                 if (data.success) {
-                    currentAvatar = src;
+                    currentAvatar = url;
                     renderizarSlotAvatarCabecera();
                     cerrarModalAvatar();
                     alert("✅ Avatar actualizado correctamente.");
