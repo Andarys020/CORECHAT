@@ -242,7 +242,6 @@ def calcular_fecha_expiracion(minutos_str):
 def validar_url_imagen(url):
     if not url:
         return False
-    # Expresión regular para validar URL de imagen
     patron = r'^(https?:\/\/.*\.(?:png|jpg|jpeg|gif|bmp|webp|svg))(?:\?.*)?$'
     return re.match(patron, url, re.IGNORECASE) is not None
 
@@ -295,11 +294,9 @@ def api_actualizar_avatar():
     user = data.get("username", "").strip()
     avatar = data.get("avatar", "")
     
-    # ✅ Validar que sea una URL válida de imagen
     if avatar and not validar_url_imagen(avatar):
         return jsonify({"success": False, "message": "La URL debe ser una imagen válida (png, jpg, jpeg, gif, bmp, webp, svg)."})
     
-    # ✅ Limitar longitud de la URL
     if len(avatar) > 500:
         return jsonify({"success": False, "message": "La URL es demasiado larga (máximo 500 caracteres)."})
     
@@ -734,7 +731,7 @@ def broadcast_user_list_all_rooms():
         socketio.emit('update_users', lista_sala, to=sala)
 
 # ==========================================
-# 4. PLANTILLA HTML (DISEÑO PC ORIGINAL + ADAPTACIÓN MÓVIL)
+# 4. PLANTILLA HTML (COMPLETA CON FUNCIONES PARA CELULAR)
 # ==========================================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -747,7 +744,7 @@ HTML_TEMPLATE = """
     <script src="https://cdn.jsdelivr.net/npm/@twemoji/api@14.1.0/dist/twemoji.min.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/emoji-mart@5.6.0/dist/browser.js"></script>
     <style>
-        /* === ESTILOS ORIGINALES DE PC (EXACTAMENTE IGUAL QUE ANTES) === */
+        /* === ESTILOS ORIGINALES DE PC === */
         html, body { height: 100%; margin: 0; padding: 0; background-color: #121212; color: #ffffff; font-family: Arial, sans-serif; overflow: hidden; }
         
         .box-container { max-width: 450px; margin: 80px auto; background: #1e1e1e; padding: 30px; border-radius: 8px; border: 1px solid #333; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
@@ -799,7 +796,7 @@ HTML_TEMPLATE = """
         .clickable-nick { cursor: pointer; user-select: none; }
         
         .custom-context-menu { position: fixed; background: #252525; border: 1px solid #444; border-radius: 4px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); z-index: 1000; display: none; min-width: 160px; padding: 5px 0; }
-        .context-menu-item { padding: 8px 12px; font-size: 13px; color: #eee; cursor: pointer; }
+        .context-menu-item { padding: 8px 12px; font-size: 13px; color: #eee; cursor: pointer; touch-action: manipulation; }
         .context-menu-item:hover { background: #0d6efd; color: white; }
 
         .private-chat-window { position: fixed; bottom: 15px; right: 310px; width: 320px; height: 380px; background: #1e1e1e; border: 1px solid #0dcaf0; border-radius: 6px; z-index: 500; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.6); }
@@ -807,23 +804,23 @@ HTML_TEMPLATE = """
         .private-chat-header { background: #151515; padding: 10px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; cursor: move; user-select: none; }
         .private-chat-header span { font-size: 13px; font-weight: bold; color: #0dcaf0; pointer-events: none; }
         .private-chat-actions { display: flex; gap: 8px; }
-        .private-chat-btn-action { background: none; border: none; font-weight: bold; cursor: pointer; font-size: 14px; padding: 0 4px; }
+        .private-chat-btn-action { background: none; border: none; font-weight: bold; cursor: pointer; font-size: 14px; padding: 0 4px; touch-action: manipulation; }
         .private-chat-min { color: #ffc107; }
         .private-chat-close { color: #dc3545; }
         .private-chat-box { flex-grow: 1; background: #121212; padding: 10px; overflow-y: auto; font-size: 13px; }
         .private-chat-footer { padding: 8px; background: #151515; display: flex; gap: 5px; border-top: 1px solid #333; }
         .private-msg-input { flex-grow: 1; background: #252525; border: 1px solid #444; color: white; padding: 6px; border-radius: 4px; }
-        .private-msg-btn { background: #0dcaf0; color: black; border: none; padding: 6px 12px; font-weight: bold; border-radius: 4px; cursor: pointer; }
+        .private-msg-btn { background: #0dcaf0; color: black; border: none; padding: 6px 12px; font-weight: bold; border-radius: 4px; cursor: pointer; touch-action: manipulation; }
 
         .media-modal { position: absolute; bottom: 55px; left: 60px; width: 360px; background: #1e1e1e; border: 1px solid #444; border-radius: 8px; z-index: 100; padding: 12px; display: none; }
         .media-modal-tabs { display: flex; gap: 5px; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 5px; }
-        .media-tab-btn { flex: 1; background: #2a2a2a; color: #aaa; border: 1px solid #333; padding: 6px; cursor: pointer; font-size: 12px; border-radius: 4px; }
+        .media-tab-btn { flex: 1; background: #2a2a2a; color: #aaa; border: 1px solid #333; padding: 6px; cursor: pointer; font-size: 12px; border-radius: 4px; touch-action: manipulation; }
         .media-tab-btn.active { background: #0d6efd; color: white; border-color: #0d6efd; }
         .search-row { margin-bottom: 10px; }
         .search-control { width: 100%; padding: 8px; background: #151515; border: 1px solid #444; color: white; border-radius: 4px; box-sizing: border-box; }
         .media-grid-container { height: 180px; overflow-y: auto; background: #151515; border-radius: 4px; padding: 8px; border: 1px solid #2d2d2d; }
         .media-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-        .media-item { width: 100%; height: 60px; object-fit: contain; cursor: pointer; border: 1px solid #333; border-radius: 4px; background: #121212; }
+        .media-item { width: 100%; height: 60px; object-fit: contain; cursor: pointer; border: 1px solid #333; border-radius: 4px; background: #121212; touch-action: manipulation; }
         .media-item:hover { border-color: #0dcaf0; }
         
         img.emoji { height: 1.35em; width: 1.35em; margin: 0 .07em 0 .1em; vertical-align: -0.15em; display: inline-block; }
@@ -832,14 +829,14 @@ HTML_TEMPLATE = """
         .avatar-upload-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 340px; background: #1e1e1e; border: 1px solid #444; border-radius: 8px; z-index: 300; padding: 20px; display: none; }
         .avatar-preview-box { width: 90px; height: 90px; border-radius: 50%; object-fit: cover; border: 2px solid #0dcaf0; display: block; margin: 15px auto; }
         
-        .profile-menu-container { position: relative; display: flex; align-items: center; cursor: pointer; user-select: none; padding: 5px 10px; border-radius: 20px; }
+        .profile-menu-container { position: relative; display: flex; align-items: center; cursor: pointer; user-select: none; padding: 5px 10px; border-radius: 20px; touch-action: manipulation; }
         .profile-menu-container:hover { background: #252525; }
         .profile-text-link { color: #ffffff; font-size: 14px; font-weight: bold; margin-right: 10px; }
         .profile-avatar-img { width: 35px; height: 35px; border-radius: 50%; object-fit: cover; border: 1px solid #444; }
         .profile-avatar-initials { width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: bold; color: #ffffff; text-transform: uppercase; border: 1px solid rgba(255,255,255,0.2); }
         
         .profile-dropdown-list { position: absolute; top: 45px; right: 0; width: 230px; background: #1e1e1e; border: 1px solid #333; border-radius: 6px; z-index: 200; display: none; padding: 5px 0; }
-        .profile-dropdown-item { padding: 10px 15px; font-size: 14px; color: #bbb; display: flex; justify-content: space-between; align-items: center; }
+        .profile-dropdown-item { padding: 10px 15px; font-size: 14px; color: #bbb; display: flex; justify-content: space-between; align-items: center; touch-action: manipulation; }
         .profile-dropdown-item:hover { background: #2d2d2d; color: #fff; }
         .profile-dropdown-divider { height: 1px; background: #333; margin: 5px 0; }
         .profile-submenu-panel { background: #151515; padding: 10px 15px; border-bottom: 1px solid #2d2d2d; display: none; }
@@ -850,34 +847,36 @@ HTML_TEMPLATE = """
         
         #admin-section { height: 100vh; overflow-y: auto; padding: 20px; box-sizing: border-box; }
         .admin-box { background: #1e1e1e; padding: 25px; border-radius: 8px; border: 1px solid #333; margin-bottom: 20px; }
-        .admin-nav { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 15px; margin-bottom: 20px; }
-        .tabs-header { display: flex; gap: 5px; margin-bottom: 20px; border-bottom: 1px solid #333; }
-        .tab-btn { background: #2d2d2d; color: #aaa; border: 1px solid #333; border-bottom: none; padding: 10px 20px; cursor: pointer; font-weight: bold; border-top-left-radius: 4px; border-top-right-radius: 4px; }
+        .admin-nav { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 15px; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+        .admin-nav h2 { margin: 0; }
+        .admin-nav .admin-nav-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
+        .tabs-header { display: flex; gap: 5px; margin-bottom: 20px; border-bottom: 1px solid #333; flex-wrap: wrap; }
+        .tab-btn { background: #2d2d2d; color: #aaa; border: 1px solid #333; border-bottom: none; padding: 10px 20px; cursor: pointer; font-weight: bold; border-top-left-radius: 4px; border-top-right-radius: 4px; touch-action: manipulation; }
         .tab-btn.active { background: #0d6efd; color: white; border-color: #0d6efd; }
         .form-inline-admin { display: flex; gap: 10px; background: #151515; padding: 15px; border-radius: 6px; border: 1px solid #333; flex-wrap: wrap; align-items: flex-end;}
         
         table { width: 100%; border-collapse: collapse; margin-top: 15px; background: #151515; }
         th, td { padding: 12px; border: 1px solid #333; text-align: left; font-size: 14px; }
         th { background: #2d2d2d; color: #aaa; }
-        .btn-sm { padding: 5px 8px; font-size: 12px; cursor: pointer; border: none; border-radius: 3px; font-weight: bold; margin-right: 2px; }
+        .btn-sm { padding: 5px 8px; font-size: 12px; cursor: pointer; border: none; border-radius: 3px; font-weight: bold; margin-right: 2px; touch-action: manipulation; }
         .badge { padding: 3px 8px; border-radius: 3px; font-size: 11px; font-weight: bold; text-transform: uppercase; display: inline-block; }
         .admin-sticker-preview { width: 40px; height: 40px; object-fit: contain; background: #121212; }
         .admin-rol-select { background: #252525; border: 1px solid #555; color: white; font-size: 12px; padding: 4px; border-radius: 4px; }
         
-        .btn-visibilidad { background: #6f42c1; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; transition: background 0.2s; margin-bottom: 15px; display: inline-block; }
+        .btn-visibilidad { background: #6f42c1; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; transition: background 0.2s; margin-bottom: 15px; display: inline-block; touch-action: manipulation; }
         .btn-visibilidad:hover { background: #59359a; }
         
         .table-input-edit { background: #252525; border: 1px solid #555; color: white; font-size: 13px; padding: 4px 8px; border-radius: 4px; width: 110px; box-sizing: border-box; }
         .table-input-edit:focus { border-color: #0dcaf0; outline: none; }
         .admin-time-select { background: #222; border: 1px solid #555; color: #ffc107; font-size: 11px; padding: 4px; border-radius: 4px; font-weight: bold; margin-right: 4px; }
-        .admin-action-container { display: flex; align-items: center; margin-bottom: 4px; }
+        .admin-action-container { display: flex; align-items: center; margin-bottom: 4px; flex-wrap: wrap; gap: 4px; }
 
-        .db-status-banner { padding: 15px; border-radius: 6px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; font-weight: bold; }
+        .db-status-banner { padding: 15px; border-radius: 6px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; font-weight: bold; flex-wrap: wrap; gap: 10px; }
         .status-local-mode { background: rgba(13, 110, 253, 0.15); border: 1px solid #0d6efd; color: #0dcaf0; }
         .status-online-mode { background: rgba(25, 135, 84, 0.15); border: 1px solid #198754; color: #198754; }
         .form-db-config { background: #151515; padding: 20px; border-radius: 6px; border: 1px solid #333; max-width: 600px; }
 
-        /* === ADAPTACIÓN PARA CELULAR (SOLO CUANDO LA PANTALLA ES PEQUEÑA) === */
+        /* === ADAPTACIÓN PARA CELULAR === */
         @media only screen and (max-width: 768px) {
             /* Header móvil fijo */
             #mobile-header {
@@ -906,12 +905,12 @@ HTML_TEMPLATE = """
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
-                max-width: 60%;
+                max-width: 50%;
             }
             
             #mobile-header .mobile-header-buttons {
                 display: flex;
-                gap: 8px;
+                gap: 6px;
                 flex-shrink: 0;
             }
             
@@ -919,15 +918,26 @@ HTML_TEMPLATE = """
                 background: #333;
                 color: white;
                 border: 1px solid #555;
-                padding: 6px 12px;
+                padding: 6px 10px;
                 border-radius: 4px;
                 cursor: pointer;
-                font-size: 14px;
+                font-size: 13px;
                 touch-action: manipulation;
+                min-height: 38px;
+                min-width: 38px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
             }
             
             #mobile-header .mobile-btn:hover {
                 background: #444;
+            }
+            
+            #mobile-header .mobile-btn-admin {
+                background: #ffc107;
+                color: black;
+                border: none;
             }
             
             /* Ajuste del chat para el header fijo */
@@ -935,13 +945,19 @@ HTML_TEMPLATE = """
                 padding-top: 65px !important;
             }
             
+            #lobby-section {
+                padding-top: 10px !important;
+            }
+            
             /* Panel de usuarios abajo en móvil */
             .side-users {
                 width: 100% !important;
-                height: 180px !important;
+                height: 200px !important;
                 margin-top: 8px !important;
                 border-radius: 6px !important;
                 display: none !important;
+                position: relative;
+                z-index: 50;
             }
             
             .side-users.mobile-visible {
@@ -963,6 +979,7 @@ HTML_TEMPLATE = """
             .input-control, .search-control {
                 font-size: 16px !important;
                 padding: 14px !important;
+                min-height: 48px !important;
             }
             
             /* Mensajes más legibles */
@@ -994,21 +1011,30 @@ HTML_TEMPLATE = """
                 font-size: 14px !important;
             }
             
+            .chat-header-container button {
+                font-size: 12px !important;
+                padding: 4px 10px !important;
+                min-height: 38px !important;
+            }
+            
             /* Controles de mensaje más grandes */
             .controls-row button {
                 font-size: 20px !important;
                 padding: 0 16px !important;
-                min-height: 44px !important;
+                min-height: 48px !important;
+                min-width: 48px !important;
             }
             
             .controls-row #message-input {
                 font-size: 16px !important;
                 padding: 12px !important;
+                min-height: 48px !important;
             }
             
             .controls-row .btn-enviar {
                 font-size: 14px !important;
                 padding: 0 18px !important;
+                min-height: 48px !important;
             }
             
             /* Ventana de chat privado */
@@ -1027,6 +1053,13 @@ HTML_TEMPLATE = """
             .private-msg-input {
                 font-size: 15px !important;
                 padding: 10px !important;
+                min-height: 44px !important;
+            }
+            
+            .private-msg-btn {
+                min-height: 44px !important;
+                min-width: 60px !important;
+                font-size: 14px !important;
             }
             
             /* Modal de avatar */
@@ -1039,6 +1072,11 @@ HTML_TEMPLATE = """
                 transform: translate(-50%, -50%) !important;
             }
             
+            .avatar-upload-modal button {
+                min-height: 48px !important;
+                font-size: 16px !important;
+            }
+            
             /* Grid de salas en 2 columnas */
             .salas-grid {
                 grid-template-columns: repeat(2, 1fr) !important;
@@ -1047,6 +1085,11 @@ HTML_TEMPLATE = """
             
             .sala-card {
                 padding: 12px !important;
+                min-height: 80px !important;
+                display: flex !important;
+                flex-direction: column !important;
+                align-items: center !important;
+                justify-content: center !important;
             }
             
             .sala-icon {
@@ -1055,6 +1098,10 @@ HTML_TEMPLATE = """
             
             .sala-name {
                 font-size: 14px !important;
+            }
+            
+            .sala-count {
+                font-size: 11px !important;
             }
             
             /* Tablas con scroll horizontal */
@@ -1079,16 +1126,19 @@ HTML_TEMPLATE = """
                 font-size: 11px !important;
                 padding: 3px 5px !important;
                 width: 70px !important;
+                min-height: 32px !important;
             }
             
             .admin-time-select {
                 font-size: 10px !important;
                 padding: 2px !important;
+                min-height: 30px !important;
             }
             
             .btn-sm {
                 font-size: 10px !important;
                 padding: 4px 6px !important;
+                min-height: 30px !important;
             }
             
             /* Ajustes generales de texto */
@@ -1123,6 +1173,7 @@ HTML_TEMPLATE = """
             .profile-dropdown-item {
                 font-size: 14px !important;
                 padding: 10px 14px !important;
+                min-height: 44px !important;
             }
             
             /* Admin panel */
@@ -1143,6 +1194,12 @@ HTML_TEMPLATE = """
                 font-size: 16px !important;
             }
             
+            .admin-nav .admin-nav-buttons button {
+                font-size: 12px !important;
+                padding: 8px 12px !important;
+                min-height: 40px !important;
+            }
+            
             .tabs-header {
                 flex-wrap: wrap !important;
                 gap: 4px !important;
@@ -1150,7 +1207,8 @@ HTML_TEMPLATE = """
             
             .tab-btn {
                 font-size: 11px !important;
-                padding: 6px 10px !important;
+                padding: 8px 12px !important;
+                min-height: 38px !important;
             }
             
             .form-inline-admin {
@@ -1167,6 +1225,11 @@ HTML_TEMPLATE = """
             .form-inline-admin button {
                 width: 100% !important;
                 padding: 12px !important;
+                min-height: 48px !important;
+            }
+            
+            .form-inline-admin select {
+                min-height: 48px !important;
             }
             
             /* DB config */
@@ -1180,28 +1243,62 @@ HTML_TEMPLATE = """
                 flex-wrap: wrap !important;
                 gap: 8px !important;
             }
+            
+            /* Botón de toggle de panel */
+            #toggle-panel-btn {
+                display: none !important;
+            }
+            
+            /* Media modal en móvil */
+            .media-modal {
+                left: 50% !important;
+                transform: translateX(-50%) !important;
+                width: 92% !important;
+                max-width: 360px !important;
+                bottom: 70px !important;
+            }
+            
+            #emoji-mart-floating-picker {
+                left: 50% !important;
+                transform: translateX(-50%) !important;
+                max-width: 92% !important;
+                bottom: 70px !important;
+            }
+            
+            /* Context menu en móvil */
+            .custom-context-menu {
+                min-width: 200px !important;
+            }
+            
+            .context-menu-item {
+                padding: 12px 16px !important;
+                font-size: 15px !important;
+                min-height: 44px !important;
+            }
         }
     </style>
 </head>
 <body>
-    <!-- HEADER MÓVIL (OCULTO EN PC) -->
+    <!-- HEADER MÓVIL -->
     <div id="mobile-header" style="display: none;">
         <div class="mobile-header-content">
             <span id="mobile-room-name">💬 Chat</span>
             <div class="mobile-header-buttons">
                 <button class="mobile-btn" id="mobile-toggle-users">👥</button>
                 <button class="mobile-btn" id="mobile-back-lobby">🏠</button>
+                <button class="mobile-btn mobile-btn-admin d-none" id="mobile-go-admin">⚙️</button>
             </div>
         </div>
     </div>
 
     <div id="custom-context-menu" class="custom-context-menu">
-        <div class="context-menu-item" onclick="abrirVentanaPrivadoDesdeContexto()">Iniciar chat privado</div>
-        <div id="context-option-mute" class="context-menu-item" onclick="ejecutarMuteLocal()">Silenciar localmente</div>
+        <div class="context-menu-item" onclick="abrirVentanaPrivadoDesdeContexto()">💬 Chat privado</div>
+        <div id="context-option-mute" class="context-menu-item" onclick="ejecutarMuteLocal()">🔇 Silenciar localmente</div>
     </div>
 
     <div id="private-chats-container"></div>
 
+    <!-- AUTH SECTION -->
     <div id="auth-section" class="box-container">
         <h2 id="auth-title" style="margin-top: 0; margin-bottom: 20px; text-align: center;">Iniciar Sesión</h2>
         <div class="form-group">
@@ -1223,26 +1320,28 @@ HTML_TEMPLATE = """
         <button id="btn-toggle-auth" class="btn-link" onclick="toggleAuthMode()">¿No tenés cuenta? Registrate acá</button>
     </div>
 
+    <!-- LOBBY SECTION -->
     <div id="lobby-section" class="d-none">
-        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 15px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 15px; flex-wrap: wrap; gap: 10px;">
             <h2 style="margin: 0;">Seleccionar Sala de Chat</h2>
-            <div style="display: flex; gap: 10px;">
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                 <button id="btn-go-admin-lobby" style="background: #ffc107; color: black; padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;" class="d-none" onclick="irAlPanelDesdeLobby()">Admin Panel</button>
-                <button style="background: #dc3545; color: white; padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer;" onclick="location.reload()">Salir</button>
+                <button style="background: #dc3545; color: white; padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer; touch-action: manipulation;" onclick="location.reload()">Salir</button>
             </div>
         </div>
         <div id="contenedor-salas-grid" class="salas-grid"></div>
     </div>
 
+    <!-- CHAT SECTION -->
     <div id="chat-section" class="d-none">
         <div class="chat-header-container">
-            <div style="display: flex; align-items: center; gap: 12px;">
-                <button style="background: #333; color: #0dcaf0; border: 1px solid #555; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold;" onclick="volverAlLobbyDeSalas()">< Volver a las Salas</button>
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <button style="background: #333; color: #0dcaf0; border: 1px solid #555; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; touch-action: manipulation;" onclick="volverAlLobbyDeSalas()">< Volver a las Salas</button>
                 <h3 id="welcome-msg" style="margin: 0;">Conectado</h3>
                 <span id="current-room-indicator" style="background: #0d6efd; color: white; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold;">Sala</span>
             </div>
-            <div style="display: flex; align-items: center; gap: 15px;">
-                <button id="btn-go-admin" style="background: #ffc107; color: black; padding: 10px 18px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;" class="d-none" onclick="irAlPanelDesdeChat()">Ir al panel de administrador</button>
+            <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                <button id="btn-go-admin" style="background: #ffc107; color: black; padding: 10px 18px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; touch-action: manipulation;" class="d-none" onclick="irAlPanelDesdeChat()">Ir al panel de administrador</button>
                 
                 <div class="profile-menu-container" id="profile-trigger" onclick="toggleProfileDropdown(event)">
                     <span class="profile-text-link">Perfil</span>
@@ -1319,7 +1418,7 @@ HTML_TEMPLATE = """
                             <span>Agregar Avatar</span> <span style="font-size: 11px; color: #0dcaf0;">📷</span>
                         </div>
                         <div class="profile-dropdown-divider"></div>
-                        <div class="profile-dropdown-item" style="color: #dc3545;" onclick="location.reload()">Cerrar Sesión</div>
+                        <div class="profile-dropdown-item" style="color: #dc3545; touch-action: manipulation;" onclick="location.reload()">Cerrar Sesión</div>
                     </div>
                 </div>
             </div>
@@ -1350,11 +1449,11 @@ HTML_TEMPLATE = """
                 </div>
 
                 <div class="controls-row">
-                    <button style="background: #2d2d2d; color: #ffc107; border: 1px solid #444; border-radius: 4px; padding: 0 15px; cursor: pointer; font-size: 18px; font-weight: bold;" onclick="toggleEmojiPicker(event)">😀</button>
-                    <button style="background: #2d2d2d; color: #0dcaf0; border: 1px solid #444; border-radius: 4px; padding: 0 15px; cursor: pointer; font-size: 16px; font-weight: bold;" onclick="toggleMediaModal(event)">🖼️</button>
+                    <button style="background: #2d2d2d; color: #ffc107; border: 1px solid #444; border-radius: 4px; padding: 0 15px; cursor: pointer; font-size: 18px; font-weight: bold; touch-action: manipulation;" onclick="toggleEmojiPicker(event)">😀</button>
+                    <button style="background: #2d2d2d; color: #0dcaf0; border: 1px solid #444; border-radius: 4px; padding: 0 15px; cursor: pointer; font-size: 16px; font-weight: bold; touch-action: manipulation;" onclick="toggleMediaModal(event)">🖼️</button>
                     
                     <input type="text" id="message-input" class="input-control flex-grow" placeholder="Escribí un mensaje..." onkeypress="if(event.key==='Enter') enviarMensaje()">
-                    <button style="background: #198754; color: white; padding: 0 25px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;" onclick="enviarMensaje()">Enviar</button>
+                    <button class="btn-enviar" style="background: #198754; color: white; padding: 0 25px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; touch-action: manipulation;" onclick="enviarMensaje()">Enviar</button>
                 </div>
             </div>
 
@@ -1371,7 +1470,7 @@ HTML_TEMPLATE = """
         </div>
     </div>
 
-    <!-- ✅ MODAL DE AVATAR - SOLO URL, SIN SUBIR ARCHIVO -->
+    <!-- AVATAR MODAL (SOLO URL) -->
     <div id="avatar-upload-modal" class="avatar-upload-modal">
         <h4 style="margin-top: 0; margin-bottom: 10px; text-align: center; color: #0dcaf0;">Configurar mi Avatar</h4>
         <div class="form-group">
@@ -1384,26 +1483,27 @@ HTML_TEMPLATE = """
             <p id="avatar-preview-text" style="color: #666; font-size: 13px;">Pegá una URL para ver la previsualización</p>
         </div>
         <div style="display: flex; gap: 10px; margin-top: 15px;">
-            <button style="flex: 1; background: #2d2d2d; color: white; border: 1px solid #444; padding: 8px; border-radius: 4px; cursor: pointer;" onclick="cerrarModalAvatar()">Cancelar</button>
-            <button style="flex: 1; background: #198754; color: white; border: none; padding: 8px; border-radius: 4px; font-weight: bold; cursor: pointer;" onclick="guardarAvatarPropio()">Guardar</button>
+            <button style="flex: 1; background: #2d2d2d; color: white; border: 1px solid #444; padding: 8px; border-radius: 4px; cursor: pointer; touch-action: manipulation;" onclick="cerrarModalAvatar()">Cancelar</button>
+            <button style="flex: 1; background: #198754; color: white; border: none; padding: 8px; border-radius: 4px; font-weight: bold; cursor: pointer; touch-action: manipulation;" onclick="guardarAvatarPropio()">Guardar</button>
         </div>
     </div>
 
+    <!-- ADMIN SECTION -->
     <div id="admin-section" class="d-none">
         <div class="admin-box">
             <div class="admin-nav">
-                <h2 style="margin: 0;">Panel de Control General</h2>
-                <div>
-                    <button id="btn-admin-view-chat" style="background: #0d6efd; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-right: 10px;" onclick="irAlLobbyDesdePanel()">Ir a las salas</button>
-                    <button style="background: #dc3545; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;" onclick="location.reload()">Cerrar Sesión</button>
+                <h2 style="margin: 0;">Panel de Control</h2>
+                <div class="admin-nav-buttons">
+                    <button id="btn-admin-view-chat" style="background: #0d6efd; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; touch-action: manipulation;" onclick="irAlLobbyDesdePanel()">Ir a las salas</button>
+                    <button style="background: #dc3545; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; touch-action: manipulation;" onclick="location.reload()">Cerrar Sesión</button>
                 </div>
             </div>
 
             <div class="tabs-header">
-                <button id="admin-tab-users" class="tab-btn active" onclick="switchAdminTab('users')">Gestionar Usuarios</button>
-                <button id="admin-tab-rooms" class="tab-btn" onclick="switchAdminTab('rooms')">Gestionar Salas de Chat</button>
-                <button id="admin-tab-stickers" class="tab-btn" onclick="switchAdminTab('stickers')">Gestionar GIFs y Stickers</button>
-                <button id="admin-tab-connection" class="tab-btn" style="color:#0dcaf0;" onclick="switchAdminTab('connection')">🔌 Conexión DB</button>
+                <button id="admin-tab-users" class="tab-btn active" onclick="switchAdminTab('users')">Usuarios</button>
+                <button id="admin-tab-rooms" class="tab-btn" onclick="switchAdminTab('rooms')">Salas</button>
+                <button id="admin-tab-stickers" class="tab-btn" onclick="switchAdminTab('stickers')">GIFs/Stickers</button>
+                <button id="admin-tab-connection" class="tab-btn" style="color:#0dcaf0;" onclick="switchAdminTab('connection')">🔌 DB</button>
             </div>
 
             <div id="admin-panel-users">
@@ -1433,7 +1533,7 @@ HTML_TEMPLATE = """
                             <option value="mujer">Mujer</option>
                         </select>
                     </div>
-                    <button style="background: #198754; color: white; border:none; padding:10px 20px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="crearUsuarioDesdeAdmin()">Agregar</button>
+                    <button style="background: #198754; color: white; border:none; padding:10px 20px; border-radius:4px; font-weight:bold; cursor:pointer; touch-action: manipulation;" onclick="crearUsuarioDesdeAdmin()">Agregar</button>
                 </div>
 
                 <h3>Listado de Cuentas del Servidor</h3>
@@ -1443,12 +1543,12 @@ HTML_TEMPLATE = """
                             <tr>
                                 <th>Red</th>
                                 <th>ID</th>
-                                <th>Editar Nick (Username)</th>
-                                <th>Editar Contraseña</th>
-                                <th>Rango / Rol</th>
-                                <th>Estado Mod</th>
+                                <th>Nick</th>
+                                <th>Pass</th>
+                                <th>Rol</th>
+                                <th>Estado</th>
                                 <th>Género</th>
-                                <th style="min-width: 320px;">Acciones de Moderación Temporal / Permanente</th>
+                                <th style="min-width: 320px;">Acciones</th>
                             </tr>
                         </thead>
                         <tbody id="tabla-adm-usuarios"></tbody>
@@ -1471,7 +1571,7 @@ HTML_TEMPLATE = """
                         <label style="font-size:12px; color:#aaa; display:block; margin-bottom:2px;">Límite Usuarios (Máx 150):</label>
                         <input type="number" id="adm-r-limit" class="input-control" value="150" min="1" max="150">
                     </div>
-                    <button style="background: #198754; color: white; border:none; padding:10px 20px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="crearSalaDesdeAdmin()">Crear Sala</button>
+                    <button style="background: #198754; color: white; border:none; padding:10px 20px; border-radius:4px; font-weight:bold; cursor:pointer; touch-action: manipulation;" onclick="crearSalaDesdeAdmin()">Crear Sala</button>
                 </div>
 
                 <h3>Salas de Chat Registradas</h3>
@@ -1506,7 +1606,7 @@ HTML_TEMPLATE = """
                             <option value="gif">GIF</option>
                         </select>
                     </div>
-                    <button style="background: #198754; color: white; border:none; padding:10px 20px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="crearStickerDesdeAdmin()">Guardar Item</button>
+                    <button style="background: #198754; color: white; border:none; padding:10px 20px; border-radius:4px; font-weight:bold; cursor:pointer; touch-action: manipulation;" onclick="crearStickerDesdeAdmin()">Guardar Item</button>
                 </div>
 
                 <h3>Galería de Elementos Registrados</h3>
@@ -1573,7 +1673,7 @@ HTML_TEMPLATE = """
                         </div>
                     </div>
 
-                    <button style="background: #0dcaf0; color: black; border: none; padding: 12px 25px; border-radius: 4px; font-weight: bold; cursor: pointer; margin-top: 10px;" onclick="guardarConfiguracionConexionMecanismo()">
+                    <button style="background: #0dcaf0; color: black; border: none; padding: 12px 25px; border-radius: 4px; font-weight: bold; cursor: pointer; touch-action: manipulation; margin-top: 10px;" onclick="guardarConfiguracionConexionMecanismo()">
                         💾 Guardar y Aplicar Cambios
                     </button>
                 </div>
@@ -1621,7 +1721,8 @@ HTML_TEMPLATE = """
                 
                 const toggleUsersBtn = document.getElementById('mobile-toggle-users');
                 if (toggleUsersBtn) {
-                    toggleUsersBtn.addEventListener('click', function() {
+                    toggleUsersBtn.addEventListener('click', function(e) {
+                        e.stopPropagation();
                         const panel = document.getElementById('side-panel-users');
                         if (panel) {
                             panel.classList.toggle('mobile-visible');
@@ -1635,6 +1736,13 @@ HTML_TEMPLATE = """
                         volverAlLobbyDeSalas();
                     });
                 }
+                
+                const goAdminBtn = document.getElementById('mobile-go-admin');
+                if (goAdminBtn) {
+                    goAdminBtn.addEventListener('click', function() {
+                        irAlPanelDesdeChat();
+                    });
+                }
             }
         });
 
@@ -1642,6 +1750,17 @@ HTML_TEMPLATE = """
             const roomName = document.getElementById('mobile-room-name');
             if (roomName) {
                 roomName.textContent = '💬 ' + (nombreSala || 'Chat');
+            }
+        }
+
+        function actualizarBotonesMobile() {
+            const goAdminBtn = document.getElementById('mobile-go-admin');
+            if (goAdminBtn) {
+                if (currentRol === 'admin') {
+                    goAdminBtn.classList.remove('d-none');
+                } else {
+                    goAdminBtn.classList.add('d-none');
+                }
             }
         }
 
@@ -1710,12 +1829,19 @@ HTML_TEMPLATE = """
                     inicializarEntornoChat();
                     document.getElementById("auth-section").classList.add("d-none");
                     
+                    actualizarBotonesMobile();
+                    
                     if (currentRol === 'admin') {
                         document.getElementById("btn-go-admin-lobby").classList.remove("d-none");
-                        irAlPanelDesdeChat();
+                        document.getElementById("btn-go-admin").classList.remove("d-none");
+                        document.getElementById("mobile-go-admin").classList.remove("d-none");
                     } else {
-                        solicitarYRenderizarLobbySalas();
+                        document.getElementById("btn-go-admin-lobby").classList.add("d-none");
+                        document.getElementById("btn-go-admin").classList.add("d-none");
+                        document.getElementById("mobile-go-admin").classList.add("d-none");
                     }
+                    
+                    solicitarYRenderizarLobbySalas();
                 }
             });
         }
@@ -1766,6 +1892,11 @@ HTML_TEMPLATE = """
             if (currentRol === 'admin') {
                 document.getElementById("btn-go-admin").classList.remove("d-none");
                 document.getElementById("btn-go-admin-lobby").classList.remove("d-none");
+                document.getElementById("mobile-go-admin").classList.remove("d-none");
+            } else {
+                document.getElementById("btn-go-admin").classList.add("d-none");
+                document.getElementById("btn-go-admin-lobby").classList.add("d-none");
+                document.getElementById("mobile-go-admin").classList.add("d-none");
             }
 
             socket = io({
@@ -2066,7 +2197,12 @@ HTML_TEMPLATE = """
             if (document.getElementById(`private-win-${targetUser}`)) return;
             let win = document.createElement("div"); win.id = `private-win-${targetUser}`; win.className = "private-chat-window";
             let total = document.querySelectorAll(".private-chat-window").length;
-            win.style.right = (310 + (total * 340)) + "px";
+            let rightOffset = 310 + (total * 340);
+            // En móvil, ajustar posición
+            if (window.innerWidth <= 768) {
+                rightOffset = 10 + (total * 10);
+            }
+            win.style.right = rightOffset + "px";
             
             win.innerHTML = `
                 <div class="private-chat-header" onmousedown="iniciarArrastreVentana(event, 'private-win-${targetUser}')">
@@ -2165,14 +2301,12 @@ HTML_TEMPLATE = """
                 return;
             }
             
-            // Validar formato de URL de imagen
             var patron = /^(https?:\/\/.*\.(?:png|jpg|jpeg|gif|bmp|webp|svg))(?:\?.*)?$/i;
             if (!patron.test(url)) {
                 alert("❌ La URL debe ser una imagen válida. Formatos: PNG, JPG, JPEG, GIF, BMP, WEBP, SVG");
                 return;
             }
             
-            // Validar longitud
             if (url.length > 500) {
                 alert("❌ La URL es demasiado larga (máximo 500 caracteres).");
                 return;
@@ -2200,7 +2334,7 @@ HTML_TEMPLATE = """
                 }
             })
             .catch(err => {
-                alert("❌ Error de conexión al guardar el avatar. Verificá tu conexión a internet.");
+                alert("❌ Error de conexión al guardar el avatar.");
                 console.error("Error al guardar avatar:", err);
             })
             .finally(() => {
@@ -2211,13 +2345,23 @@ HTML_TEMPLATE = """
 
         // --- NAVEGACIÓN PANEL ADMIN ---
         function irAlPanelDesdeChat() {
+            if (currentRol !== 'admin') {
+                alert("Solo los administradores pueden acceder al panel.");
+                return;
+            }
             document.getElementById("chat-section").classList.add("d-none");
             document.getElementById("lobby-section").classList.add("d-none");
             document.getElementById("admin-section").classList.remove("d-none");
             cargarTablaUsuariosAdmin(); cargarTablaSalasAdmin(); cargarTablaStickersAdmin();
             solicitarYRenderizarConfigDBAdmin();
         }
-        function irAlPanelDesdeLobby() { irAlPanelDesdeChat(); }
+        function irAlPanelDesdeLobby() { 
+            if (currentRol !== 'admin') {
+                alert("Solo los administradores pueden acceder al panel.");
+                return;
+            }
+            irAlPanelDesdeChat(); 
+        }
         function irAlLobbyDesdePanel() { document.getElementById("admin-section").classList.add("d-none"); solicitarYRenderizarLobbySalas(); }
 
         function switchAdminTab(t) {
@@ -2303,17 +2447,17 @@ HTML_TEMPLATE = """
             fetch('/api/admin/cambiar_estado', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username: username, accion: accion, tiempo: tiempo })
-            }).then(() => { alert(`Acción ejecutada.`); cargarTablaUsuariosAdmin(); });
+            }).then(() => { alert(`✅ Acción ejecutada.`); cargarTablaUsuariosAdmin(); });
         }
 
         function ejecutarPatearSalaTemporal(username, userId) {
-            if (!adminRoomPos) { alert("No podés patear usuarios porque no estás dentro de ninguna sala."); return; }
+            if (!adminRoomPos) { alert("❌ No podés patear usuarios porque no estás dentro de ninguna sala."); return; }
             let tiempo = document.getElementById(`time-patear-${userId}`).value;
-            if (confirm(`¿Patear a @${username}?`)) {
+            if (confirm(`¿Patear a @${username} de la sala ${adminRoomPos}?`)) {
                 fetch('/api/admin/cambiar_estado', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ username: username, accion: 'patear_sala', tiempo: tiempo, sala_admin: adminRoomPos })
-                }).then(() => { alert("Pateado."); cargarTablaUsuariosAdmin(); });
+                }).then(() => { alert("✅ Pateado."); cargarTablaUsuariosAdmin(); });
             }
         }
 
@@ -2344,14 +2488,14 @@ HTML_TEMPLATE = """
             let p = document.getElementById("adm-u-pass").value.trim();
             let r = document.getElementById("adm-u-rol").value;
             let g = document.getElementById("adm-u-gender").value;
-            if(!u || !p) return;
+            if(!u || !p) { alert("Completá todos los campos."); return; }
             fetch('/api/admin/crear_usuario', {
                 method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username:u, password:p, rol:r, genero:g })
             }).then(() => { cargarTablaUsuariosAdmin(); });
         }
 
         function eliminarUsuarioAdmin(user) {
-            if(!confirm("¿Eliminar?")) return;
+            if(!confirm("¿Eliminar esta cuenta?")) return;
             fetch('/api/admin/eliminar_usuario', {
                 method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username: user })
             }).then(() => { cargarTablaUsuariosAdmin(); });
@@ -2362,7 +2506,7 @@ HTML_TEMPLATE = """
                 let tbody = document.getElementById("tabla-adm-salas"); tbody.innerHTML = "";
                 salas.forEach(s => {
                     let tr = document.createElement("tr");
-                    tr.innerHTML = `<td>${s.id}</td><td>${s.icono}</td><td><strong>${s.nombre}</strong></td><td>${s.limite}</td><td><button class="btn-sm" style="background:#dc3545; color:white;" onclick="eliminarSalaAdmin(${s.id})">Eliminar</button></td>`;
+                    tr.innerHTML = `<td>${s.id}</td><td>${s.icono}</td><td><strong>${s.nombre}</strong></td><td>${s.limite}</td><td><button class="btn-sm" style="background:#dc3545; color:white; touch-action: manipulation;" onclick="eliminarSalaAdmin(${s.id})">Eliminar</button></td>`;
                     tbody.appendChild(tr);
                 });
             });
@@ -2372,6 +2516,7 @@ HTML_TEMPLATE = """
             let nombre = document.getElementById("adm-r-name").value.trim();
             let icono = document.getElementById("adm-r-icon").value.trim();
             let limite = document.getElementById("adm-r-limit").value;
+            if(!nombre) { alert("El nombre de la sala es obligatorio."); return; }
             fetch('/api/admin/crear_sala', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ nombre: nombre, icono: icono, limite: limite })
@@ -2379,6 +2524,7 @@ HTML_TEMPLATE = """
         }
 
         function eliminarSalaAdmin(idSala) {
+            if(!confirm("¿Eliminar esta sala?")) return;
             fetch('/api/admin/eliminar_sala', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id: idSala })
@@ -2391,7 +2537,7 @@ HTML_TEMPLATE = """
                 if(data) {
                     data.forEach(s => {
                         let tr = document.createElement("tr");
-                        tr.innerHTML = `<td>${s.id}</td><td>${s.nombre}</td><td>${s.tipo}</td><td><img src="${s.url}" class="admin-sticker-preview"></td><td>${s.url}</td><td><button class="btn-sm" style="background:#dc3545; color:white;" onclick="eliminarStickerAdmin(${s.id})">Quitar</button></td>`;
+                        tr.innerHTML = `<td>${s.id}</td><td>${s.nombre}</td><td>${s.tipo}</td><td><img src="${s.url}" class="admin-sticker-preview"></td><td style="font-size:11px; max-width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.url}</td><td><button class="btn-sm" style="background:#dc3545; color:white; touch-action: manipulation;" onclick="eliminarStickerAdmin(${s.id})">Quitar</button></td>`;
                         tbody.appendChild(tr);
                     });
                 }
@@ -2402,6 +2548,7 @@ HTML_TEMPLATE = """
             let nom = document.getElementById("adm-s-name").value.trim();
             let url = document.getElementById("adm-s-url").value.trim();
             let tipo = document.getElementById("adm-s-tipo").value;
+            if(!nom || !url) { alert("Nombre y URL son obligatorios."); return; }
             fetch('/api/admin/crear_sticker', {
                 method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ nombre: nom, url: url, tipo: tipo })
             }).then(() => { cargarTablaStickersAdmin(); });
@@ -2464,9 +2611,9 @@ HTML_TEMPLATE = """
             .then(r => r.json())
             .then(data => {
                 if(data.success) {
-                    alert("Configuración guardada y base de datos sincronizada de forma exitosa.");
+                    alert("✅ Configuración guardada y base de datos sincronizada.");
                 } else {
-                    alert("Error: " + data.message);
+                    alert("❌ Error: " + data.message);
                 }
                 solicitarYRenderizarConfigDBAdmin();
                 cargarTablaUsuariosAdmin();
