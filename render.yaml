@@ -1,16 +1,13 @@
 services:
   - type: web
-    name: webchat
-    env: python
+    name: webchat-app
+    runtime: python
+    plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn --worker-class gevent --workers 1 --bind 0.0.0.0:$PORT webchat:app
+    startCommand: gunicorn -k geventwebsocket.gunicorn.workers.GeventWebSocketWorker -w 1 app:app
     envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: webchat-db
-          property: connectionString
-    plan: free
-
-databases:
-  - name: webchat-db
-    plan: free
+      - key: PYTHON_VERSION
+        value: 3.14.3
+      - key: PORT
+        value: 8550
+    healthCheckPath: /
