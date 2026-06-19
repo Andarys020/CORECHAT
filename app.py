@@ -3,8 +3,11 @@ import json
 import sqlite3
 import datetime
 import re
+<<<<<<< HEAD
 import hashlib
 from typing import Optional, Dict, Any, List, Tuple
+=======
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
 from flask import Flask, render_template_string, request, jsonify
 from flask_socketio import SocketIO, emit, join_room, leave_room
 
@@ -17,10 +20,20 @@ except ImportError:
     HAS_POSTGRES = False
 
 app = Flask(__name__)
+<<<<<<< HEAD
 app.config['SECRET_KEY'] = os.urandom(24).hex()
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10 MB
 
 # === CONFIGURACIÓN PARA HUGGING FACE ===
+=======
+app.config['SECRET_KEY'] = 'secreto123!'
+
+# ✅ Aumentar límite de tamaño de solicitud
+app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10 MB
+
+# === CONFIGURACIÓN PARA HUGGING FACE ===
+# En Hugging Face Spaces, usamos gevent con el worker adecuado
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
@@ -35,6 +48,7 @@ socketio = SocketIO(
     max_http_buffer_size=10 * 1024 * 1024
 )
 
+<<<<<<< HEAD
 # Variable global en memoria
 admin_visible: bool = False
 usuarios_conectados: Dict[str, Dict[str, Any]] = {}
@@ -43,6 +57,16 @@ usuarios_conectados: Dict[str, Dict[str, Any]] = {}
 CONFIG_FILE: str = "db_config.json"
 
 def cargar_config_db() -> Dict[str, str]:
+=======
+# Variable global en memoria para controlar si el admin decide hacerse visible
+admin_visible = False
+usuarios_conectados = {}
+
+# FILE CONFIG PARA GUARDAR PARAMETROS ONLINE
+CONFIG_FILE = "db_config.json"
+
+def cargar_config_db():
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "r") as f:
             return json.load(f)
@@ -55,6 +79,7 @@ def cargar_config_db() -> Dict[str, str]:
         "port": "5432"
     }
 
+<<<<<<< HEAD
 def guardar_config_db(config: Dict[str, str]) -> None:
     with open(CONFIG_FILE, "w") as f:
         json.dump(config, f, indent=4)
@@ -63,6 +88,17 @@ db_config: Dict[str, str] = cargar_config_db()
 
 # ==========================================
 # GESTOR DE CONEXIONES HÍBRIDO
+=======
+def guardar_config_db(config):
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(config, f, indent=4)
+
+# Cargar configuración inicial
+db_config = cargar_config_db()
+
+# ==========================================
+# GESTOR DE CONEXIONES HÍBRIDO (SQLITE / POSTGRES)
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
 # ==========================================
 def obtener_conexion():
     if db_config["motor"] == "postgres":
@@ -78,7 +114,11 @@ def obtener_conexion():
     else:
         return sqlite3.connect("chat_app.db")
 
+<<<<<<< HEAD
 def db_query(query: str, params: tuple = (), fetchall: bool = False, commit: bool = False):
+=======
+def db_query(query, params=(), fetchall=False, commit=False):
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
     es_postgres = (db_config["motor"] == "postgres")
     if es_postgres:
         query = query.replace("?", "%s")
@@ -104,6 +144,7 @@ def db_query(query: str, params: tuple = (), fetchall: bool = False, commit: boo
     return res
 
 # ==========================================
+<<<<<<< HEAD
 # FUNCIONES DE SEGURIDAD
 # ==========================================
 def hash_password(password: str) -> str:
@@ -116,6 +157,11 @@ def verify_password(password: str, hashed: str) -> bool:
 # BASE DE DATOS E INICIALIZACIÓN
 # ==========================================
 def init_db() -> None:
+=======
+# BASE DE DATOS E INICIALIZACIÓN
+# ==========================================
+def init_db():
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
     try:
         es_postgres = (db_config["motor"] == "postgres")
         pk_type = "SERIAL PRIMARY KEY" if es_postgres else "INTEGER PRIMARY KEY AUTOINCREMENT"
@@ -161,6 +207,10 @@ def init_db() -> None:
             )
         """, commit=True)
         
+<<<<<<< HEAD
+=======
+        # Verificar y agregar columnas faltantes
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
         if not es_postgres:
             check = db_query("PRAGMA table_info(usuarios)", fetchall=True)
             columnas_existentes = [row[1] for row in check] if check else []
@@ -180,12 +230,17 @@ def init_db() -> None:
                     except Exception as e:
                         print(f"-> Error agregando columna '{col}': {e}")
         
+<<<<<<< HEAD
+=======
+        # Crear sala por defecto
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
         res_salas = db_query("SELECT COUNT(*) FROM salas", fetchall=False)
         if res_salas and res_salas[0] == 0:
             db_query("INSERT INTO salas (nombre, icono, limite) VALUES (?, ?, ?)", 
                     ("Sala General", "🌍", 150), commit=True)
             print("-> Sala por defecto 'Sala General' creada.")
 
+<<<<<<< HEAD
         res_admin = db_query("SELECT id FROM usuarios WHERE username = 'Administrador'", fetchall=False)
         if not res_admin:
             admin_hash = hash_password("1234")
@@ -194,6 +249,16 @@ def init_db() -> None:
             print("-> Cuenta 'Administrador' creada.")
         
         print(f"-> Base de datos inicializada en modo [{db_config['motor'].upper()}] con Python 3.14")
+=======
+        # Crear administrador por defecto
+        res_admin = db_query("SELECT id FROM usuarios WHERE username = 'Administrador'", fetchall=False)
+        if not res_admin:
+            db_query("INSERT INTO usuarios (username, password, rol, estado, genero, avatar) VALUES (?, ?, ?, ?, ?, ?)", 
+                     ("Administrador", "1234", "admin", "activo", "hombre", ""), commit=True)
+            print("-> Cuenta 'Administrador' creada.")
+        
+        print(f"-> Base de datos inicializada en modo [{db_config['motor'].upper()}]")
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
     except Exception as e:
         print(f"[ERROR INIT DB]: {e}")
 
@@ -202,7 +267,11 @@ init_db()
 # ==========================================
 # FUNCIONES AUXILIARES
 # ==========================================
+<<<<<<< HEAD
 def verificar_y_limpiar_sanciones(username: str) -> None:
+=======
+def verificar_y_limpiar_sanciones(username):
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
     res = db_query("SELECT estado, ban_expira, mute_expira FROM usuarios WHERE username=?", (username,))
     if not res:
         return
@@ -214,14 +283,20 @@ def verificar_y_limpiar_sanciones(username: str) -> None:
             dt_exp = datetime.datetime.fromisoformat(ban_expira)
             if ahora > dt_exp:
                 db_query("UPDATE usuarios SET estado='activo', ban_expira=NULL WHERE username=?", (username,), commit=True)
+<<<<<<< HEAD
         except (ValueError, TypeError) as e:
             print(f"Error al parsear ban_expira para {username}: {e}")
+=======
+        except:
+            pass
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
 
     if estado == 'silenciado' and mute_expira:
         try:
             dt_exp = datetime.datetime.fromisoformat(mute_expira)
             if ahora > dt_exp:
                 db_query("UPDATE usuarios SET estado='activo', mute_expira=NULL WHERE username=?", (username,), commit=True)
+<<<<<<< HEAD
         except (ValueError, TypeError) as e:
             print(f"Error al parsear mute_expira para {username}: {e}")
 
@@ -235,13 +310,30 @@ def calcular_fecha_expiracion(minutos_str: str) -> Optional[str]:
         return None
 
 def validar_url_imagen(url: str) -> bool:
+=======
+        except:
+            pass
+
+def calcular_fecha_expiracion(minutos_str):
+    if minutos_str == "perm":
+        return None
+    mins = int(minutos_str)
+    return (datetime.datetime.now() + datetime.timedelta(minutes=mins)).isoformat()
+
+# ✅ Función para validar URL de imagen
+def validar_url_imagen(url):
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
     if not url:
         return False
     patron = r'^(https?:\/\/.*\.(?:png|jpg|jpeg|gif|bmp|webp|svg))(?:\?.*)?$'
     return re.match(patron, url, re.IGNORECASE) is not None
 
 # ==========================================
+<<<<<<< HEAD
 # ENDPOINTS HTTP Y API REST
+=======
+# 2. ENDPOINTS HTTP Y API REST
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
 # ==========================================
 @app.route('/')
 def home():
@@ -255,6 +347,7 @@ def api_login():
     
     verificar_y_limpiar_sanciones(user)
     
+<<<<<<< HEAD
     res = db_query("SELECT username, rol, estado, genero, avatar, password FROM usuarios WHERE username=?", (user,))
     if not res:
         return jsonify({"success": False, "message": "Usuario no existe."})
@@ -263,6 +356,13 @@ def api_login():
     if not verify_password(passw, hashed_pass):
         return jsonify({"success": False, "message": "Contraseña incorrecta."})
     
+=======
+    res = db_query("SELECT username, rol, estado, genero, avatar FROM usuarios WHERE username=? AND password=?", (user, passw))
+    if not res:
+        return jsonify({"success": False, "message": "Usuario o contraseña incorrectos."})
+    
+    username, rol, estado, genero, avatar = res
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
     if estado == 'ban':
         return jsonify({"success": False, "message": "Tu cuenta se encuentra baneada."})
         
@@ -277,17 +377,26 @@ def api_registro():
     
     if not user or not passw:
         return jsonify({"success": False, "message": "Campos incompletos."})
+<<<<<<< HEAD
     
     if len(passw) < 4:
         return jsonify({"success": False, "message": "La contraseña debe tener al menos 4 caracteres."})
+=======
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
         
     res = db_query("SELECT id FROM usuarios WHERE username=?", (user,))
     if res:
         return jsonify({"success": False, "message": "El nombre de usuario ya existe."})
+<<<<<<< HEAD
     
     hashed = hash_password(passw)
     db_query("INSERT INTO usuarios (username, password, rol, estado, genero, avatar) VALUES (?, ?, 'user', 'activo', ?, '')", 
              (user, hashed, gender), commit=True)
+=======
+        
+    db_query("INSERT INTO usuarios (username, password, rol, estado, genero, avatar) VALUES (?, ?, 'user', 'activo', ?, '')", 
+             (user, passw, gender), commit=True)
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
     return jsonify({"success": True})
 
 @app.route('/api/usuario/actualizar_avatar', methods=['POST'])
@@ -359,6 +468,10 @@ def api_admin_eliminar_sala():
         socketio.emit('sala_eliminada_force', {"sala": nombre_sala}, broadcast=True)
     return jsonify({"success": True})
 
+<<<<<<< HEAD
+=======
+# --- ENDPOINTS EXCLUSIVOS DE ADMINISTRACIÓN ---
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
 @app.route('/api/admin/users', methods=['GET'])
 def api_admin_users():
     rows = db_query("SELECT id, username, password, rol, estado, genero FROM usuarios ORDER BY id DESC", fetchall=True)
@@ -417,10 +530,16 @@ def api_admin_crear_usuario():
         
     if db_query("SELECT id FROM usuarios WHERE username=?", (user,)):
         return jsonify({"success": False, "message": "El usuario ya existe."})
+<<<<<<< HEAD
     
     hashed = hash_password(passw)
     db_query("INSERT INTO usuarios (username, password, rol, estado, genero, avatar) VALUES (?, ?, ?, 'activo', ?, '')", 
              (user, hashed, rol, gender), commit=True)
+=======
+        
+    db_query("INSERT INTO usuarios (username, password, rol, estado, genero, avatar) VALUES (?, ?, ?, 'activo', ?, '')", 
+             (user, passw, rol, gender), commit=True)
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
     return jsonify({"success": True})
 
 @app.route('/api/admin/modificar_usuario_completo', methods=['POST'])
@@ -443,9 +562,14 @@ def api_admin_modificar_usuario_completo():
         if db_query("SELECT id FROM usuarios WHERE username=?", (nuevo_nick,)):
             return jsonify({"success": False, "message": "El nuevo nombre de usuario ya está en uso."})
 
+<<<<<<< HEAD
     hashed = hash_password(nueva_pass)
     db_query("UPDATE usuarios SET username=?, password=?, rol=? WHERE id=?", 
             (nuevo_nick, hashed, nuevo_rol, user_id), commit=True)
+=======
+    db_query("UPDATE usuarios SET username=?, password=?, rol=? WHERE id=?", 
+            (nuevo_nick, nueva_pass, nuevo_rol, user_id), commit=True)
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
     socketio.emit('force_action', {"target": antiguo_nick, "accion": "rol_change", "nuevo_rol": nuevo_rol}, broadcast=True)
     broadcast_user_list_all_rooms()
     return jsonify({"success": True})
@@ -510,6 +634,10 @@ def api_admin_eliminar_sticker():
     db_query("DELETE FROM stickers WHERE id=?", (sid,), commit=True)
     return jsonify({"success": True})
 
+<<<<<<< HEAD
+=======
+# --- ENDPOINTS DE CONFIGURACIÓN DE CONEXIÓN ---
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
 @app.route('/api/admin/get_db_config', methods=['GET'])
 def api_get_db_config():
     cfg = db_config.copy()
@@ -551,7 +679,11 @@ def api_save_db_config():
     return jsonify({"success": True})
 
 # ==========================================
+<<<<<<< HEAD
 # LÓGICA DE WEBSOCKETS (SOCKET.IO)
+=======
+# 3. LÓGICA DE WEBSOCKETS (SOCKET.IO)
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
 # ==========================================
 @socketio.on('join_chat')
 def handle_join(data):
@@ -600,9 +732,14 @@ def handle_cambiar_sala(data):
                         return
                     else:
                         db_query("DELETE FROM bloqueos_salas WHERE id=?", (b_id,), commit=True)
+<<<<<<< HEAD
                 except (ValueError, TypeError) as e:
                     print(f"Error al parsear expira para bloqueo {b_id}: {e}")
                     db_query("DELETE FROM bloqueos_salas WHERE id=?", (b_id,), commit=True)
+=======
+                except: 
+                    pass
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
     
     res_sala = db_query("SELECT limite FROM salas WHERE nombre=?", (sala_nueva,))
     if not res_sala:
@@ -734,7 +871,11 @@ def broadcast_user_list_all_rooms():
         socketio.emit('update_users', lista_sala, to=sala)
 
 # ==========================================
+<<<<<<< HEAD
 # PLANTILLA HTML COMPLETA CON CORECHAT
+=======
+# 4. PLANTILLA HTML (COMPLETA CON TODAS LAS FUNCIONES)
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
 # ==========================================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -742,11 +883,16 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<<<<<<< HEAD
     <title>💬 CORECHAT - Chat en Vivo</title>
+=======
+    <title>WebChat Profesional - Flask</title>
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@twemoji/api@14.1.0/dist/twemoji.min.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/emoji-mart@5.6.0/dist/browser.js"></script>
     <style>
+<<<<<<< HEAD
         /* === ESTILOS BASE === */
         * { box-sizing: border-box; }
         html, body { 
@@ -831,11 +977,30 @@ HTML_TEMPLATE = """
             text-align: center; 
             transition: transform 0.2s, border-color 0.2s; 
         }
+=======
+        /* === ESTILOS ORIGINALES DE PC === */
+        html, body { height: 100%; margin: 0; padding: 0; background-color: #121212; color: #ffffff; font-family: Arial, sans-serif; overflow: hidden; }
+        
+        .box-container { max-width: 450px; margin: 80px auto; background: #1e1e1e; padding: 30px; border-radius: 8px; border: 1px solid #333; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; color: #bbb; font-size: 14px; }
+        .input-control { width: 100%; padding: 10px; background: #2d2d2d; border: 1px solid #444; color: white; border-radius: 4px; box-sizing: border-box; font-size: 14px; }
+        .input-control:focus { border-color: #0d6efd; outline: none; }
+        .btn-block { width: 100%; padding: 12px; background: #0d6efd; border: none; color: white; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; margin-top: 10px; }
+        .btn-block:hover { background: #0b5ed7; }
+        .btn-link { background: none; border: none; color: #0dcaf0; cursor: pointer; display: block; margin: 15px auto 0; text-decoration: underline; font-size: 14px; }
+        .d-none { display: none !important; }
+        
+        #lobby-section { max-width: 800px; margin: 50px auto; background: #1e1e1e; padding: 25px; border-radius: 8px; border: 1px solid #333; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        .salas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px; margin-top: 20px; }
+        .sala-card { background: #252525; border: 1px solid #444; border-radius: 6px; padding: 15px; cursor: pointer; text-align: center; transition: transform 0.2s, border-color 0.2s; }
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
         .sala-card:hover { transform: translateY(-3px); border-color: #0dcaf0; background: #2a2a2a; }
         .sala-icon { font-size: 32px; margin-bottom: 8px; display: block; }
         .sala-name { font-weight: bold; font-size: 16px; color: #fff; margin-bottom: 5px; }
         .sala-count { font-size: 12px; color: #aaa; }
 
+<<<<<<< HEAD
         #chat-section { 
             display: flex; 
             flex-direction: column; 
@@ -935,6 +1100,21 @@ HTML_TEMPLATE = """
             box-sizing: border-box; 
             min-height: 0; 
         }
+=======
+        #chat-section { display: flex; flex-direction: column; height: 100vh; padding: 15px; box-sizing: border-box; }
+        .chat-header-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; position: relative; flex-shrink: 0; }
+        .chat-layout { display: flex; flex-grow: 1; height: calc(100vh - 100px); min-height: 0; position: relative; }
+        .main-chat { flex: 3; display: flex; flex-direction: column; height: 100%; min-height: 0; position: relative; padding-right: 10px; }
+        #chat-box { flex-grow: 1; background: #151515; border: 1px solid #333; padding: 15px; overflow-y: auto; border-radius: 6px; margin-bottom: 15px; min-height: 0; }
+        .controls-row { display: flex; gap: 10px; flex-shrink: 0; position: relative; }
+        .flex-grow { flex-grow: 1; }
+        .toggle-divider-zone { position: relative; display: flex; align-items: center; justify-content: center; width: 20px; flex-shrink: 0; z-index: 10; }
+        
+        #toggle-panel-btn { background: #222; border: 1px solid #444; color: #0dcaf0; width: 22px; height: 45px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; padding: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.5); position: absolute; }
+
+        .side-users { width: 280px; background: #1e1e1e; border-radius: 6px; border: 1px solid #333; height: 100%; box-sizing: border-box; display: flex; flex-direction: column; min-height: 0; transition: width 0.3s, opacity 0.2s; overflow: hidden; flex-shrink: 0; }
+        .side-users-inner { display: flex; flex-direction: column; width: 280px; height: 100%; padding: 15px; box-sizing: border-box; min-height: 0; }
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
         #lista-usuarios { flex-grow: 1; overflow-y: auto; min-height: 0; }
         .side-users.collapsed { width: 0 !important; opacity: 0; border: none; }
         
@@ -948,6 +1128,7 @@ HTML_TEMPLATE = """
         
         .chat-msg-line { display: flex; align-items: center; flex-wrap: wrap; margin: 8px 0; }
         .msg-avatar-img { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; border: 1px solid #555; margin-right: 6px; display: inline-block; }
+<<<<<<< HEAD
         .msg-avatar-initials { 
             width: 24px; 
             height: 24px; 
@@ -1016,10 +1197,27 @@ HTML_TEMPLATE = """
             padding: 0 4px; 
             touch-action: manipulation; 
         }
+=======
+        .msg-avatar-initials { width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; color: #ffffff; text-transform: uppercase; border: 1px solid rgba(255,255,255,0.15); margin-right: 6px; }
+        .chat-img-msg { max-width: 120px; max-height: 120px; display: block; margin-top: 5px; border-radius: 4px; }
+        .clickable-nick { cursor: pointer; user-select: none; }
+        
+        .custom-context-menu { position: fixed; background: #252525; border: 1px solid #444; border-radius: 4px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); z-index: 1000; display: none; min-width: 160px; padding: 5px 0; }
+        .context-menu-item { padding: 8px 12px; font-size: 13px; color: #eee; cursor: pointer; touch-action: manipulation; }
+        .context-menu-item:hover { background: #0d6efd; color: white; }
+
+        .private-chat-window { position: fixed; bottom: 15px; right: 310px; width: 320px; height: 380px; background: #1e1e1e; border: 1px solid #0dcaf0; border-radius: 6px; z-index: 500; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.6); }
+        .private-chat-window.minimized { height: 40px !important; }
+        .private-chat-header { background: #151515; padding: 10px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; cursor: move; user-select: none; }
+        .private-chat-header span { font-size: 13px; font-weight: bold; color: #0dcaf0; pointer-events: none; }
+        .private-chat-actions { display: flex; gap: 8px; }
+        .private-chat-btn-action { background: none; border: none; font-weight: bold; cursor: pointer; font-size: 14px; padding: 0 4px; touch-action: manipulation; }
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
         .private-chat-min { color: #ffc107; }
         .private-chat-close { color: #dc3545; }
         .private-chat-box { flex-grow: 1; background: #121212; padding: 10px; overflow-y: auto; font-size: 13px; }
         .private-chat-footer { padding: 8px; background: #151515; display: flex; gap: 5px; border-top: 1px solid #333; }
+<<<<<<< HEAD
         .private-msg-input { 
             flex-grow: 1; 
             background: #252525; 
@@ -1340,10 +1538,76 @@ HTML_TEMPLATE = """
             flex-wrap: wrap; 
             gap: 10px; 
         }
+=======
+        .private-msg-input { flex-grow: 1; background: #252525; border: 1px solid #444; color: white; padding: 6px; border-radius: 4px; }
+        .private-msg-btn { background: #0dcaf0; color: black; border: none; padding: 6px 12px; font-weight: bold; border-radius: 4px; cursor: pointer; touch-action: manipulation; }
+
+        .media-modal { position: absolute; bottom: 55px; left: 60px; width: 360px; background: #1e1e1e; border: 1px solid #444; border-radius: 8px; z-index: 100; padding: 12px; display: none; }
+        .media-modal-tabs { display: flex; gap: 5px; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 5px; }
+        .media-tab-btn { flex: 1; background: #2a2a2a; color: #aaa; border: 1px solid #333; padding: 6px; cursor: pointer; font-size: 12px; border-radius: 4px; touch-action: manipulation; }
+        .media-tab-btn.active { background: #0d6efd; color: white; border-color: #0d6efd; }
+        .search-row { margin-bottom: 10px; }
+        .search-control { width: 100%; padding: 8px; background: #151515; border: 1px solid #444; color: white; border-radius: 4px; box-sizing: border-box; }
+        .media-grid-container { height: 180px; overflow-y: auto; background: #151515; border-radius: 4px; padding: 8px; border: 1px solid #2d2d2d; }
+        .media-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+        .media-item { width: 100%; height: 60px; object-fit: contain; cursor: pointer; border: 1px solid #333; border-radius: 4px; background: #121212; touch-action: manipulation; }
+        .media-item:hover { border-color: #0dcaf0; }
+        
+        img.emoji { height: 1.35em; width: 1.35em; margin: 0 .07em 0 .1em; vertical-align: -0.15em; display: inline-block; }
+        #emoji-mart-floating-picker { position: absolute; bottom: 55px; left: 10px; z-index: 110; display: none; box-shadow: 0 4px 15px rgba(0,0,0,0.6); }
+
+        .avatar-upload-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 340px; background: #1e1e1e; border: 1px solid #444; border-radius: 8px; z-index: 300; padding: 20px; display: none; }
+        .avatar-preview-box { width: 90px; height: 90px; border-radius: 50%; object-fit: cover; border: 2px solid #0dcaf0; display: block; margin: 15px auto; }
+        
+        .profile-menu-container { position: relative; display: flex; align-items: center; cursor: pointer; user-select: none; padding: 5px 10px; border-radius: 20px; touch-action: manipulation; }
+        .profile-menu-container:hover { background: #252525; }
+        .profile-text-link { color: #ffffff; font-size: 14px; font-weight: bold; margin-right: 10px; }
+        .profile-avatar-img { width: 35px; height: 35px; border-radius: 50%; object-fit: cover; border: 1px solid #444; }
+        .profile-avatar-initials { width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: bold; color: #ffffff; text-transform: uppercase; border: 1px solid rgba(255,255,255,0.2); }
+        
+        .profile-dropdown-list { position: absolute; top: 45px; right: 0; width: 230px; background: #1e1e1e; border: 1px solid #333; border-radius: 6px; z-index: 200; display: none; padding: 5px 0; }
+        .profile-dropdown-item { padding: 10px 15px; font-size: 14px; color: #bbb; display: flex; justify-content: space-between; align-items: center; touch-action: manipulation; }
+        .profile-dropdown-item:hover { background: #2d2d2d; color: #fff; }
+        .profile-dropdown-divider { height: 1px; background: #333; margin: 5px 0; }
+        .profile-submenu-panel { background: #151515; padding: 10px 15px; border-bottom: 1px solid #2d2d2d; display: none; }
+        .submenu-title { font-size: 11px; color: #0dcaf0; font-weight: bold; text-transform: uppercase; margin-bottom: 8px; display: block; }
+        .submenu-grid { display: flex; flex-direction: column; gap: 8px; }
+        .submenu-field { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #aaa; }
+        .submenu-select { background: #252525; border: 1px solid #444; color: white; padding: 4px 6px; border-radius: 4px; font-size: 12px; width: 110px; }
+        
+        #admin-section { height: 100vh; overflow-y: auto; padding: 20px; box-sizing: border-box; }
+        .admin-box { background: #1e1e1e; padding: 25px; border-radius: 8px; border: 1px solid #333; margin-bottom: 20px; }
+        .admin-nav { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 15px; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+        .admin-nav h2 { margin: 0; }
+        .admin-nav .admin-nav-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
+        .tabs-header { display: flex; gap: 5px; margin-bottom: 20px; border-bottom: 1px solid #333; flex-wrap: wrap; }
+        .tab-btn { background: #2d2d2d; color: #aaa; border: 1px solid #333; border-bottom: none; padding: 10px 20px; cursor: pointer; font-weight: bold; border-top-left-radius: 4px; border-top-right-radius: 4px; touch-action: manipulation; }
+        .tab-btn.active { background: #0d6efd; color: white; border-color: #0d6efd; }
+        .form-inline-admin { display: flex; gap: 10px; background: #151515; padding: 15px; border-radius: 6px; border: 1px solid #333; flex-wrap: wrap; align-items: flex-end;}
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: #151515; }
+        th, td { padding: 12px; border: 1px solid #333; text-align: left; font-size: 14px; }
+        th { background: #2d2d2d; color: #aaa; }
+        .btn-sm { padding: 5px 8px; font-size: 12px; cursor: pointer; border: none; border-radius: 3px; font-weight: bold; margin-right: 2px; touch-action: manipulation; }
+        .badge { padding: 3px 8px; border-radius: 3px; font-size: 11px; font-weight: bold; text-transform: uppercase; display: inline-block; }
+        .admin-sticker-preview { width: 40px; height: 40px; object-fit: contain; background: #121212; }
+        .admin-rol-select { background: #252525; border: 1px solid #555; color: white; font-size: 12px; padding: 4px; border-radius: 4px; }
+        
+        .btn-visibilidad { background: #6f42c1; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 14px; transition: background 0.2s; margin-bottom: 15px; display: inline-block; touch-action: manipulation; }
+        .btn-visibilidad:hover { background: #59359a; }
+        
+        .table-input-edit { background: #252525; border: 1px solid #555; color: white; font-size: 13px; padding: 4px 8px; border-radius: 4px; width: 110px; box-sizing: border-box; }
+        .table-input-edit:focus { border-color: #0dcaf0; outline: none; }
+        .admin-time-select { background: #222; border: 1px solid #555; color: #ffc107; font-size: 11px; padding: 4px; border-radius: 4px; font-weight: bold; margin-right: 4px; }
+        .admin-action-container { display: flex; align-items: center; margin-bottom: 4px; flex-wrap: wrap; gap: 4px; }
+
+        .db-status-banner { padding: 15px; border-radius: 6px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; font-weight: bold; flex-wrap: wrap; gap: 10px; }
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
         .status-local-mode { background: rgba(13, 110, 253, 0.15); border: 1px solid #0d6efd; color: #0dcaf0; }
         .status-online-mode { background: rgba(25, 135, 84, 0.15); border: 1px solid #198754; color: #198754; }
         .form-db-config { background: #151515; padding: 20px; border-radius: 6px; border: 1px solid #333; max-width: 600px; }
 
+<<<<<<< HEAD
         /* === HEADER MÓVIL === */
         #mobile-header {
             display: none;
@@ -1406,10 +1670,13 @@ HTML_TEMPLATE = """
             border: none;
         }
 
+=======
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
         /* === ADAPTACIÓN PARA CELULAR === */
         @media only screen and (max-width: 768px) {
             #mobile-header {
                 display: block !important;
+<<<<<<< HEAD
             }
             
             #lobby-section {
@@ -1442,10 +1709,78 @@ HTML_TEMPLATE = """
                 font-size: 11px !important;
                 padding: 4px 8px !important;
                 min-height: 32px !important;
+=======
+                background: #1e1e1e;
+                padding: 10px 15px;
+                border-bottom: 1px solid #333;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                z-index: 999;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            }
+            
+            #mobile-header .mobile-header-content {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            
+            #mobile-room-name {
+                color: #0dcaf0;
+                font-weight: bold;
+                font-size: 16px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                max-width: 50%;
+            }
+            
+            #mobile-header .mobile-header-buttons {
+                display: flex;
+                gap: 6px;
+                flex-shrink: 0;
+            }
+            
+            #mobile-header .mobile-btn {
+                background: #333;
+                color: white;
+                border: 1px solid #555;
+                padding: 6px 10px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 13px;
+                touch-action: manipulation;
+                min-height: 38px;
+                min-width: 38px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            
+            #mobile-header .mobile-btn:hover {
+                background: #444;
+            }
+            
+            #mobile-header .mobile-btn-admin {
+                background: #ffc107;
+                color: black;
+                border: none;
+            }
+            
+            #chat-section {
+                padding-top: 65px !important;
+            }
+            
+            #lobby-section {
+                padding-top: 10px !important;
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
             }
             
             .side-users {
                 width: 100% !important;
+<<<<<<< HEAD
                 height: 180px !important;
                 margin-top: 4px !important;
                 border-radius: 4px !important;
@@ -1453,6 +1788,14 @@ HTML_TEMPLATE = """
                 position: relative;
                 z-index: 50;
                 flex-shrink: 0;
+=======
+                height: 200px !important;
+                margin-top: 8px !important;
+                border-radius: 6px !important;
+                display: none !important;
+                position: relative;
+                z-index: 50;
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
             }
             
             .side-users.mobile-visible {
@@ -1461,6 +1804,7 @@ HTML_TEMPLATE = """
             
             .side-users-inner {
                 width: 100% !important;
+<<<<<<< HEAD
                 padding: 8px !important;
                 height: 100% !important;
             }
@@ -1550,10 +1894,116 @@ HTML_TEMPLATE = """
             .chat-img-msg {
                 max-width: 80px !important;
                 max-height: 80px !important;
+=======
+                padding: 10px !important;
+            }
+            
+            .btn-block, .btn-sm, .btn-visibilidad {
+                font-size: 16px !important;
+                padding: 14px 20px !important;
+                min-height: 48px !important;
+            }
+            
+            .input-control, .search-control {
+                font-size: 16px !important;
+                padding: 14px !important;
+                min-height: 48px !important;
+            }
+            
+            .chat-msg-line {
+                font-size: 15px !important;
+                margin: 8px 0 !important;
+                gap: 4px !important;
+            }
+            
+            .msg-avatar-img, .msg-avatar-initials {
+                width: 28px !important;
+                height: 28px !important;
+                font-size: 11px !important;
+            }
+            
+            .chat-img-msg {
+                max-width: 100px !important;
+                max-height: 100px !important;
+            }
+            
+            .chat-header-container {
+                flex-wrap: wrap !important;
+                gap: 6px !important;
+                padding-top: 4px !important;
+            }
+            
+            .chat-header-container h3 {
+                font-size: 14px !important;
+            }
+            
+            .chat-header-container button {
+                font-size: 12px !important;
+                padding: 4px 10px !important;
+                min-height: 38px !important;
+            }
+            
+            .controls-row button {
+                font-size: 20px !important;
+                padding: 0 16px !important;
+                min-height: 48px !important;
+                min-width: 48px !important;
+            }
+            
+            .controls-row #message-input {
+                font-size: 16px !important;
+                padding: 12px !important;
+                min-height: 48px !important;
+            }
+            
+            .controls-row .btn-enviar {
+                font-size: 14px !important;
+                padding: 0 18px !important;
+                min-height: 48px !important;
+            }
+            
+            .private-chat-window {
+                width: 92% !important;
+                max-width: 360px !important;
+                height: 55vh !important;
+                right: 4% !important;
+                bottom: 10px !important;
+            }
+            
+            .private-chat-header span {
+                font-size: 14px !important;
+            }
+            
+            .private-msg-input {
+                font-size: 15px !important;
+                padding: 10px !important;
+                min-height: 44px !important;
+            }
+            
+            .private-msg-btn {
+                min-height: 44px !important;
+                min-width: 60px !important;
+                font-size: 14px !important;
+            }
+            
+            .avatar-upload-modal {
+                width: 92% !important;
+                max-width: 380px !important;
+                padding: 20px !important;
+                top: 50% !important;
+                left: 50% !important;
+                transform: translate(-50%, -50%) !important;
+            }
+            
+            .avatar-upload-modal button {
+                min-height: 48px !important;
+                font-size: 16px !important;
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
             }
             
             .salas-grid {
                 grid-template-columns: repeat(2, 1fr) !important;
+<<<<<<< HEAD
                 gap: 6px !important;
             }
             
@@ -1662,6 +2112,30 @@ HTML_TEMPLATE = """
                 width: 100% !important;
                 padding: 10px !important;
                 min-height: 40px !important;
+=======
+                gap: 10px !important;
+            }
+            
+            .sala-card {
+                padding: 12px !important;
+                min-height: 80px !important;
+                display: flex !important;
+                flex-direction: column !important;
+                align-items: center !important;
+                justify-content: center !important;
+            }
+            
+            .sala-icon {
+                font-size: 28px !important;
+            }
+            
+            .sala-name {
+                font-size: 14px !important;
+            }
+            
+            .sala-count {
+                font-size: 11px !important;
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
             }
             
             .table-responsive {
@@ -1672,6 +2146,7 @@ HTML_TEMPLATE = """
             }
             
             table {
+<<<<<<< HEAD
                 font-size: 11px !important;
                 min-width: 500px !important;
             }
@@ -1698,19 +2173,158 @@ HTML_TEMPLATE = """
                 font-size: 9px !important;
                 padding: 2px 4px !important;
                 min-height: 26px !important;
+=======
+                font-size: 12px !important;
+                min-width: 600px !important;
+            }
+            
+            th, td {
+                padding: 8px 6px !important;
+                font-size: 12px !important;
+            }
+            
+            .table-input-edit {
+                font-size: 11px !important;
+                padding: 3px 5px !important;
+                width: 70px !important;
+                min-height: 32px !important;
+            }
+            
+            .admin-time-select {
+                font-size: 10px !important;
+                padding: 2px !important;
+                min-height: 30px !important;
+            }
+            
+            .btn-sm {
+                font-size: 10px !important;
+                padding: 4px 6px !important;
+                min-height: 30px !important;
+            }
+            
+            body, p, span, div, input, button, select, label {
+                font-size: 15px !important;
+            }
+            
+            h2 { font-size: 20px !important; }
+            h3 { font-size: 17px !important; }
+            h4 { font-size: 15px !important; }
+            
+            #lobby-section {
+                margin: 15px !important;
+                padding: 15px !important;
+            }
+            
+            .profile-text-link {
+                font-size: 13px !important;
+            }
+            
+            .profile-avatar-img, .profile-avatar-initials {
+                width: 32px !important;
+                height: 32px !important;
+                font-size: 12px !important;
+            }
+            
+            .profile-dropdown-list {
+                width: 210px !important;
+                right: -5px !important;
+            }
+            
+            .profile-dropdown-item {
+                font-size: 14px !important;
+                padding: 10px 14px !important;
+                min-height: 44px !important;
+            }
+            
+            #admin-section {
+                padding: 10px !important;
+            }
+            
+            .admin-box {
+                padding: 15px !important;
+            }
+            
+            .admin-nav {
+                flex-wrap: wrap !important;
+                gap: 8px !important;
+            }
+            
+            .admin-nav h2 {
+                font-size: 16px !important;
+            }
+            
+            .admin-nav .admin-nav-buttons button {
+                font-size: 12px !important;
+                padding: 8px 12px !important;
+                min-height: 40px !important;
+            }
+            
+            .tabs-header {
+                flex-wrap: wrap !important;
+                gap: 4px !important;
+            }
+            
+            .tab-btn {
+                font-size: 11px !important;
+                padding: 8px 12px !important;
+                min-height: 38px !important;
+            }
+            
+            .form-inline-admin {
+                flex-direction: column !important;
+                gap: 8px !important;
+                align-items: stretch !important;
+            }
+            
+            .form-inline-admin > div {
+                min-width: unset !important;
+                width: 100% !important;
+            }
+            
+            .form-inline-admin button {
+                width: 100% !important;
+                padding: 12px !important;
+                min-height: 48px !important;
+            }
+            
+            .form-inline-admin select {
+                min-height: 48px !important;
+            }
+            
+            .form-db-config {
+                padding: 15px !important;
+            }
+            
+            .db-status-banner {
+                font-size: 13px !important;
+                padding: 12px !important;
+                flex-wrap: wrap !important;
+                gap: 8px !important;
+            }
+            
+            #toggle-panel-btn {
+                display: none !important;
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
             }
             
             .media-modal {
                 left: 50% !important;
                 transform: translateX(-50%) !important;
+<<<<<<< HEAD
                 width: 94% !important;
                 max-width: 340px !important;
                 bottom: 55px !important;
+=======
+                width: 92% !important;
+                max-width: 360px !important;
+                bottom: 70px !important;
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
             }
             
             #emoji-mart-floating-picker {
                 left: 50% !important;
                 transform: translateX(-50%) !important;
+<<<<<<< HEAD
                 max-width: 94% !important;
                 bottom: 55px !important;
             }
@@ -1743,15 +2357,35 @@ HTML_TEMPLATE = """
                 margin: 60px 8px !important;
                 padding: 20px !important;
                 max-width: 100% !important;
+=======
+                max-width: 92% !important;
+                bottom: 70px !important;
+            }
+            
+            .custom-context-menu {
+                min-width: 200px !important;
+            }
+            
+            .context-menu-item {
+                padding: 12px 16px !important;
+                font-size: 15px !important;
+                min-height: 44px !important;
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
             }
         }
     </style>
 </head>
 <body>
     <!-- HEADER MÓVIL -->
+<<<<<<< HEAD
     <div id="mobile-header">
         <div class="mobile-header-content">
             <span id="mobile-room-name">💬 CORECHAT</span>
+=======
+    <div id="mobile-header" style="display: none;">
+        <div class="mobile-header-content">
+            <span id="mobile-room-name">💬 Chat</span>
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
             <div class="mobile-header-buttons">
                 <button class="mobile-btn" id="mobile-toggle-users">👥</button>
                 <button class="mobile-btn" id="mobile-back-lobby">🏠</button>
@@ -1769,7 +2403,11 @@ HTML_TEMPLATE = """
 
     <!-- AUTH SECTION -->
     <div id="auth-section" class="box-container">
+<<<<<<< HEAD
         <h2 id="auth-title" style="margin-top: 0; margin-bottom: 20px; text-align: center;">💬 CORECHAT</h2>
+=======
+        <h2 id="auth-title" style="margin-top: 0; margin-bottom: 20px; text-align: center;">Iniciar Sesión</h2>
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
         <div class="form-group">
             <label>Usuario</label>
             <input type="text" id="username" class="input-control" placeholder="Usuario" onkeypress="if(event.key==='Enter') procesarAutenticacion()">
@@ -1791,11 +2429,19 @@ HTML_TEMPLATE = """
 
     <!-- LOBBY SECTION -->
     <div id="lobby-section" class="d-none">
+<<<<<<< HEAD
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 10px; flex-wrap: wrap; gap: 6px;">
             <h2 style="margin: 0; font-size: 18px;">💬 CORECHAT - Salas</h2>
             <div style="display: flex; gap: 6px; flex-wrap: wrap;">
                 <button id="btn-go-admin-lobby" style="background: #ffc107; color: black; padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px;" class="d-none" onclick="irAlPanelDesdeLobby()">Admin</button>
                 <button style="background: #dc3545; color: white; padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; touch-action: manipulation; font-size: 12px;" onclick="location.reload()">Salir</button>
+=======
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+            <h2 style="margin: 0;">Seleccionar Sala de Chat</h2>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button id="btn-go-admin-lobby" style="background: #ffc107; color: black; padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;" class="d-none" onclick="irAlPanelDesdeLobby()">Admin Panel</button>
+                <button style="background: #dc3545; color: white; padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer; touch-action: manipulation;" onclick="location.reload()">Salir</button>
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
             </div>
         </div>
         <div id="contenedor-salas-grid" class="salas-grid"></div>
@@ -1804,6 +2450,7 @@ HTML_TEMPLATE = """
     <!-- CHAT SECTION -->
     <div id="chat-section" class="d-none">
         <div class="chat-header-container">
+<<<<<<< HEAD
             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex:1; min-width:0;">
                 <button style="background: #333; color: #0dcaf0; border: 1px solid #555; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; touch-action: manipulation; font-size: 12px;" onclick="volverAlLobbyDeSalas()">◀</button>
                 <h3 id="welcome-msg" style="margin: 0; font-size: 13px; flex:1; min-width:0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Conectado</h3>
@@ -1811,13 +2458,26 @@ HTML_TEMPLATE = """
             </div>
             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex-shrink:0;">
                 <button id="btn-go-admin" style="background: #ffc107; color: black; padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; touch-action: manipulation; font-size: 12px;" class="d-none" onclick="irAlPanelDesdeChat()">⚙️</button>
+=======
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <button style="background: #333; color: #0dcaf0; border: 1px solid #555; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; touch-action: manipulation;" onclick="volverAlLobbyDeSalas()">< Volver a las Salas</button>
+                <h3 id="welcome-msg" style="margin: 0;">Conectado</h3>
+                <span id="current-room-indicator" style="background: #0d6efd; color: white; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold;">Sala</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                <button id="btn-go-admin" style="background: #ffc107; color: black; padding: 10px 18px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; touch-action: manipulation;" class="d-none" onclick="irAlPanelDesdeChat()">Ir al panel de administrador</button>
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                 
                 <div class="profile-menu-container" id="profile-trigger" onclick="toggleProfileDropdown(event)">
                     <span class="profile-text-link">Perfil</span>
                     <div id="profile-avatar-slot"></div>
                     
                     <div class="profile-dropdown-list" id="profile-dropdown">
+<<<<<<< HEAD
                         <div class="profile-dropdown-item" style="font-size:11px; color:#666; pointer-events: none;" id="dropdown-user-info">Usuario</div>
+=======
+                        <div class="profile-dropdown-item" style="font-size:12px; color:#666; pointer-events: none;" id="dropdown-user-info">Usuario</div>
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                         <div class="profile-dropdown-divider"></div>
                         
                         <div class="profile-dropdown-item" onclick="toggleSubmenu(event, 'submenu-nick')">
@@ -1904,10 +2564,17 @@ HTML_TEMPLATE = """
                         <button id="media-tab-sticker" class="media-tab-btn" onclick="switchMediaTab('sticker')">Stickers</button>
                     </div>
                     <div id="search-container-gif" class="search-row">
+<<<<<<< HEAD
                         <input type="text" id="media-search-gif" class="search-control" placeholder="Buscar GIF..." oninput="filtrarMedia('gif')">
                     </div>
                     <div id="search-container-sticker" class="search-row d-none">
                         <input type="text" id="media-search-sticker" class="search-control" placeholder="Buscar Sticker..." oninput="filtrarMedia('sticker')">
+=======
+                        <input type="text" id="media-search-gif" class="search-control" placeholder="Buscar GIF por nombre..." oninput="filtrarMedia('gif')">
+                    </div>
+                    <div id="search-container-sticker" class="search-row d-none">
+                        <input type="text" id="media-search-sticker" class="search-control" placeholder="Buscar Sticker por nombre..." oninput="filtrarMedia('sticker')">
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                     </div>
                     <div id="grid-container-gif" class="media-grid-container">
                         <div id="media-items-gif" class="media-grid"></div>
@@ -1918,11 +2585,19 @@ HTML_TEMPLATE = """
                 </div>
 
                 <div class="controls-row">
+<<<<<<< HEAD
                     <button style="background: #2d2d2d; color: #ffc107; border: 1px solid #444; border-radius: 4px; padding: 0 12px; cursor: pointer; font-size: 16px; font-weight: bold; touch-action: manipulation; min-height:38px;" onclick="toggleEmojiPicker(event)">😀</button>
                     <button style="background: #2d2d2d; color: #0dcaf0; border: 1px solid #444; border-radius: 4px; padding: 0 12px; cursor: pointer; font-size: 14px; font-weight: bold; touch-action: manipulation; min-height:38px;" onclick="toggleMediaModal(event)">🖼️</button>
                     
                     <input type="text" id="message-input" class="input-control flex-grow" placeholder="Escribí un mensaje..." onkeypress="if(event.key==='Enter') enviarMensaje()">
                     <button class="btn-enviar" style="background: #198754; color: white; padding: 0 18px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; touch-action: manipulation; min-height:38px; font-size:13px;" onclick="enviarMensaje()">Enviar</button>
+=======
+                    <button style="background: #2d2d2d; color: #ffc107; border: 1px solid #444; border-radius: 4px; padding: 0 15px; cursor: pointer; font-size: 18px; font-weight: bold; touch-action: manipulation;" onclick="toggleEmojiPicker(event)">😀</button>
+                    <button style="background: #2d2d2d; color: #0dcaf0; border: 1px solid #444; border-radius: 4px; padding: 0 15px; cursor: pointer; font-size: 16px; font-weight: bold; touch-action: manipulation;" onclick="toggleMediaModal(event)">🖼️</button>
+                    
+                    <input type="text" id="message-input" class="input-control flex-grow" placeholder="Escribí un mensaje..." onkeypress="if(event.key==='Enter') enviarMensaje()">
+                    <button class="btn-enviar" style="background: #198754; color: white; padding: 0 25px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; touch-action: manipulation;" onclick="enviarMensaje()">Enviar</button>
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                 </div>
             </div>
 
@@ -1932,13 +2607,18 @@ HTML_TEMPLATE = """
 
             <div class="side-users" id="side-panel-users">
                 <div class="side-users-inner">
+<<<<<<< HEAD
                     <h4 style="margin-top: 0; margin-bottom: 10px; border-bottom: 1px solid #333; padding-bottom: 4px; font-size:14px;">Conectados</h4>
+=======
+                    <h4 style="margin-top: 0; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 5px;">Conectados</h4>
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                     <div id="lista-usuarios"></div>
                 </div>
             </div>
         </div>
     </div>
 
+<<<<<<< HEAD
     <!-- AVATAR MODAL -->
     <div id="avatar-upload-modal" class="avatar-upload-modal">
         <h4 style="margin-top: 0; margin-bottom: 10px; text-align: center; color: #0dcaf0; font-size:16px;">Configurar Avatar</h4>
@@ -1954,6 +2634,23 @@ HTML_TEMPLATE = """
         <div style="display: flex; gap: 10px; margin-top: 15px;">
             <button style="flex: 1; background: #2d2d2d; color: white; border: 1px solid #444; padding: 8px; border-radius: 4px; cursor: pointer; touch-action: manipulation; font-size:13px;" onclick="cerrarModalAvatar()">Cancelar</button>
             <button style="flex: 1; background: #198754; color: white; border: none; padding: 8px; border-radius: 4px; font-weight: bold; cursor: pointer; touch-action: manipulation; font-size:13px;" onclick="guardarAvatarPropio()">Guardar</button>
+=======
+    <!-- AVATAR MODAL (SOLO URL) -->
+    <div id="avatar-upload-modal" class="avatar-upload-modal">
+        <h4 style="margin-top: 0; margin-bottom: 10px; text-align: center; color: #0dcaf0;">Configurar mi Avatar</h4>
+        <div class="form-group">
+            <label style="font-size: 12px; color: #aaa;">Pegá la URL de tu imagen:</label>
+            <input type="text" id="avatar-url-input" class="input-control" placeholder="https://ejemplo.com/mi-avatar.png" oninput="vistaPreviaAvatarUrl()" style="font-size: 14px;">
+            <small style="color: #666; font-size: 11px; display: block; margin-top: 4px;">Formatos: PNG, JPG, JPEG, GIF, BMP, WEBP, SVG</small>
+        </div>
+        <div style="text-align: center;">
+            <img id="avatar-preview-img" src="" class="avatar-preview-box" style="display: none;">
+            <p id="avatar-preview-text" style="color: #666; font-size: 13px;">Pegá una URL para ver la previsualización</p>
+        </div>
+        <div style="display: flex; gap: 10px; margin-top: 15px;">
+            <button style="flex: 1; background: #2d2d2d; color: white; border: 1px solid #444; padding: 8px; border-radius: 4px; cursor: pointer; touch-action: manipulation;" onclick="cerrarModalAvatar()">Cancelar</button>
+            <button style="flex: 1; background: #198754; color: white; border: none; padding: 8px; border-radius: 4px; font-weight: bold; cursor: pointer; touch-action: manipulation;" onclick="guardarAvatarPropio()">Guardar</button>
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
         </div>
     </div>
 
@@ -1961,21 +2658,33 @@ HTML_TEMPLATE = """
     <div id="admin-section" class="d-none">
         <div class="admin-box">
             <div class="admin-nav">
+<<<<<<< HEAD
                 <h2 style="margin: 0; font-size:18px;">⚙️ Panel de Control - CORECHAT</h2>
                 <div class="admin-nav-buttons">
                     <button id="btn-admin-view-chat" style="background: #0d6efd; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; touch-action: manipulation; font-size:13px;" onclick="irAlLobbyDesdePanel()">Salas</button>
                     <button style="background: #dc3545; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; touch-action: manipulation; font-size:13px;" onclick="location.reload()">Salir</button>
+=======
+                <h2 style="margin: 0;">Panel de Control</h2>
+                <div class="admin-nav-buttons">
+                    <button id="btn-admin-view-chat" style="background: #0d6efd; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; touch-action: manipulation;" onclick="irAlLobbyDesdePanel()">Ir a las salas</button>
+                    <button style="background: #dc3545; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; touch-action: manipulation;" onclick="location.reload()">Cerrar Sesión</button>
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                 </div>
             </div>
 
             <div class="tabs-header">
                 <button id="admin-tab-users" class="tab-btn active" onclick="switchAdminTab('users')">Usuarios</button>
                 <button id="admin-tab-rooms" class="tab-btn" onclick="switchAdminTab('rooms')">Salas</button>
+<<<<<<< HEAD
                 <button id="admin-tab-stickers" class="tab-btn" onclick="switchAdminTab('stickers')">GIFs</button>
+=======
+                <button id="admin-tab-stickers" class="tab-btn" onclick="switchAdminTab('stickers')">GIFs/Stickers</button>
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                 <button id="admin-tab-connection" class="tab-btn" style="color:#0dcaf0;" onclick="switchAdminTab('connection')">🔌 DB</button>
             </div>
 
             <div id="admin-panel-users">
+<<<<<<< HEAD
                 <button id="btn-toggle-visibilidad" class="btn-visibilidad" onclick="cambiarVisibilidadAdminWeb()">Cargando...</button>
                 <div id="admin-current-room-status" style="margin-bottom: 12px; color: #0dcaf0; font-weight: bold; font-size: 13px;">
                     Posición: <span id="admin-room-label" style="color: #ffc107;">Fuera</span>
@@ -1991,21 +2700,50 @@ HTML_TEMPLATE = """
                     </div>
                     <div style="flex: 1; min-width: 100px;">
                         <select id="adm-u-rol" class="input-control" style="font-size:13px; padding:8px;">
+=======
+                <button id="btn-toggle-visibilidad" class="btn-visibilidad" onclick="cambiarVisibilidadAdminWeb()">Cargando Modo...</button>
+                <div id="admin-current-room-status" style="margin-bottom: 15px; color: #0dcaf0; font-weight: bold; font-size: 14px;">
+                    Posición actual del Administrador: <span id="admin-room-label" style="color: #ffc107;">Fuera de las salas</span>
+                </div>
+
+                <h3>Crear Usuario Nuevo</h3>
+                <div class="form-inline-admin" style="margin-bottom: 25px;">
+                    <div style="flex: 1; min-width: 140px;">
+                        <input type="text" id="adm-u-name" class="input-control" placeholder="Nombre">
+                    </div>
+                    <div style="flex: 1; min-width: 140px;">
+                        <input type="text" id="adm-u-pass" class="input-control" placeholder="Contraseña">
+                    </div>
+                    <div style="flex: 1; min-width: 120px;">
+                        <select id="adm-u-rol" class="input-control">
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                             <option value="user">User</option>
                             <option value="mod">Mod</option>
                             <option value="admin">Admin</option>
                         </select>
                     </div>
+<<<<<<< HEAD
                     <div style="flex: 1; min-width: 100px;">
                         <select id="adm-u-gender" class="input-control" style="font-size:13px; padding:8px;">
+=======
+                    <div style="flex: 1; min-width: 120px;">
+                        <select id="adm-u-gender" class="input-control">
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                             <option value="hombre">Hombre</option>
                             <option value="mujer">Mujer</option>
                         </select>
                     </div>
+<<<<<<< HEAD
                     <button style="background: #198754; color: white; border:none; padding:8px 16px; border-radius:4px; font-weight:bold; cursor:pointer; touch-action: manipulation; font-size:13px;" onclick="crearUsuarioDesdeAdmin()">Agregar</button>
                 </div>
 
                 <h3 style="font-size:15px;">Listado de Cuentas</h3>
+=======
+                    <button style="background: #198754; color: white; border:none; padding:10px 20px; border-radius:4px; font-weight:bold; cursor:pointer; touch-action: manipulation;" onclick="crearUsuarioDesdeAdmin()">Agregar</button>
+                </div>
+
+                <h3>Listado de Cuentas del Servidor</h3>
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                 <div style="width: 100%; overflow-x: auto;" class="table-responsive">
                     <table>
                         <thead>
@@ -2017,7 +2755,11 @@ HTML_TEMPLATE = """
                                 <th>Rol</th>
                                 <th>Estado</th>
                                 <th>Género</th>
+<<<<<<< HEAD
                                 <th style="min-width: 280px;">Acciones</th>
+=======
+                                <th style="min-width: 320px;">Acciones</th>
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                             </tr>
                         </thead>
                         <tbody id="tabla-adm-usuarios"></tbody>
@@ -2026,6 +2768,7 @@ HTML_TEMPLATE = """
             </div>
 
             <div id="admin-panel-rooms" class="d-none">
+<<<<<<< HEAD
                 <h3 style="font-size:15px;">Crear Nueva Sala</h3>
                 <div class="form-inline-admin" style="margin-bottom: 20px;">
                     <div style="flex: 2; min-width: 140px;">
@@ -2044,15 +2787,41 @@ HTML_TEMPLATE = """
                 </div>
 
                 <h3 style="font-size:15px;">Salas Registradas</h3>
+=======
+                <h3>Crear Nueva Sala de Chat</h3>
+                <div class="form-inline-admin" style="margin-bottom: 25px;">
+                    <div style="flex: 2; min-width: 180px;">
+                        <label style="font-size:12px; color:#aaa; display:block; margin-bottom:2px;">Nombre de Sala:</label>
+                        <input type="text" id="adm-r-name" class="input-control" placeholder="Ej: Sala de Juegos">
+                    </div>
+                    <div style="flex: 1; min-width: 90px;">
+                        <label style="font-size:12px; color:#aaa; display:block; margin-bottom:2px;">Ícono (Emoji):</label>
+                        <input type="text" id="adm-r-icon" class="input-control" placeholder="🎮" maxlength="4">
+                    </div>
+                    <div style="flex: 1; min-width: 140px;">
+                        <label style="font-size:12px; color:#aaa; display:block; margin-bottom:2px;">Límite Usuarios (Máx 150):</label>
+                        <input type="number" id="adm-r-limit" class="input-control" value="150" min="1" max="150">
+                    </div>
+                    <button style="background: #198754; color: white; border:none; padding:10px 20px; border-radius:4px; font-weight:bold; cursor:pointer; touch-action: manipulation;" onclick="crearSalaDesdeAdmin()">Crear Sala</button>
+                </div>
+
+                <h3>Salas de Chat Registradas</h3>
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                 <div class="table-responsive">
                     <table>
                         <thead>
                             <tr>
                                 <th>ID</th>
                                 <th>Ícono</th>
+<<<<<<< HEAD
                                 <th>Nombre</th>
                                 <th>Límite</th>
                                 <th>Operación</th>
+=======
+                                <th>Nombre de Sala</th>
+                                <th>Límite de Capacidad</th>
+                                <th>Operaciones</th>
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                             </tr>
                         </thead>
                         <tbody id="tabla-adm-salas"></tbody>
@@ -2061,6 +2830,7 @@ HTML_TEMPLATE = """
             </div>
 
             <div id="admin-panel-stickers" class="d-none">
+<<<<<<< HEAD
                 <h3 style="font-size:15px;">Añadir Multimedia</h3>
                 <div class="form-inline-admin" style="margin-bottom: 20px;">
                     <div style="flex: 1; min-width: 120px;">
@@ -2071,14 +2841,33 @@ HTML_TEMPLATE = """
                     </div>
                     <div style="flex: 1; min-width: 100px;">
                         <select id="adm-s-tipo" class="input-control" style="font-size:13px; padding:8px;">
+=======
+                <h3>Añadir Nuevo Contenido Multimedia</h3>
+                <div class="form-inline-admin" style="margin-bottom: 25px;">
+                    <div style="flex: 1; min-width: 150px;">
+                        <input type="text" id="adm-s-name" class="input-control" placeholder="Ej: Messi saludo">
+                    </div>
+                    <div style="flex: 2; min-width: 220px;">
+                        <input type="text" id="adm-s-url" class="input-control" placeholder="https://.../imagen.gif">
+                    </div>
+                    <div style="flex: 1; min-width: 130px;">
+                        <select id="adm-s-tipo" class="input-control">
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                             <option value="sticker">Sticker</option>
                             <option value="gif">GIF</option>
                         </select>
                     </div>
+<<<<<<< HEAD
                     <button style="background: #198754; color: white; border:none; padding:8px 16px; border-radius:4px; font-weight:bold; cursor:pointer; touch-action: manipulation; font-size:13px;" onclick="crearStickerDesdeAdmin()">Guardar</button>
                 </div>
 
                 <h3 style="font-size:15px;">Galería</h3>
+=======
+                    <button style="background: #198754; color: white; border:none; padding:10px 20px; border-radius:4px; font-weight:bold; cursor:pointer; touch-action: manipulation;" onclick="crearStickerDesdeAdmin()">Guardar Item</button>
+                </div>
+
+                <h3>Galería de Elementos Registrados</h3>
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                 <div class="table-responsive">
                     <table>
                         <thead>
@@ -2086,8 +2875,13 @@ HTML_TEMPLATE = """
                                 <th>ID</th>
                                 <th>Nombre</th>
                                 <th>Tipo</th>
+<<<<<<< HEAD
                                 <th>Vista</th>
                                 <th>URL</th>
+=======
+                                <th>Previsualización</th>
+                                <th>URL Absoluta</th>
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                                 <th>Operación</th>
                             </tr>
                         </thead>
@@ -2097,6 +2891,7 @@ HTML_TEMPLATE = """
             </div>
 
             <div id="admin-panel-connection" class="d-none">
+<<<<<<< HEAD
                 <h3 style="font-size:15px;">Configuración de Base de Datos</h3>
                 <p style="color: #aaa; font-size: 13px; max-width: 700px;">
                     Modo <strong>Local</strong> (SQLite) o <strong>Online</strong> (PostgreSQL en la nube).
@@ -2104,19 +2899,36 @@ HTML_TEMPLATE = """
 
                 <div id="db-status-container" class="db-status-banner status-local-mode">
                     <div>Estado: <span id="lbl-motor-actual">SQLITE LOCAL</span></div>
+=======
+                <h3>Conectividad del Servidor de Base de Datos</h3>
+                <p style="color: #aaa; font-size: 14px; max-width: 700px;">
+                    Podés configurar este sistema para que corra de modo <strong>Local</strong> (guardando todo en el archivo local de la PC) o de modo <strong>Online</strong> (conectándose en la nube mediante un servidor remoto PostgreSQL como Supabase, Render o Railway).
+                </p>
+
+                <div id="db-status-container" class="db-status-banner status-local-mode">
+                    <div>Estado Actual: <span id="lbl-motor-actual">SQLITE LOCAL</span></div>
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                 </div>
 
                 <div class="form-db-config">
                     <div class="form-group">
+<<<<<<< HEAD
                         <label style="font-size:12px;">Motor Activo:</label>
                         <select id="cfg-db-motor" class="input-control" onchange="alternarVisibilidadCamposNube()" style="font-size:13px; padding:8px;">
                             <option value="sqlite">Local (SQLite)</option>
                             <option value="postgres">Online (PostgreSQL)</option>
+=======
+                        <label>Seleccionar Motor Activo:</label>
+                        <select id="cfg-db-motor" class="input-control" onchange="alternarVisibilidadCamposNube()">
+                            <option value="sqlite">Local (SQLite - Archivo Interno)</option>
+                            <option value="postgres">Online Remoto (PostgreSQL - Servidor en la nube)</option>
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                         </select>
                     </div>
 
                     <div id="panel-campos-nube" class="d-none">
                         <div class="form-group">
+<<<<<<< HEAD
                             <label style="font-size:12px;">Host Remoto:</label>
                             <input type="text" id="cfg-db-host" class="input-control" placeholder="ej: aws-0-us-east-1.pooler.supabase.com" style="font-size:13px; padding:8px;">
                         </div>
@@ -2138,12 +2950,40 @@ HTML_TEMPLATE = """
                             <div class="form-group" style="flex:1; min-width:120px;">
                                 <label style="font-size:12px;">Contraseña:</label>
                                 <input type="password" id="cfg-db-pass" class="input-control" placeholder="Tu contraseña" style="font-size:13px; padding:8px;">
+=======
+                            <label>Host Remoto (Servidor / Endpoint):</label>
+                            <input type="text" id="cfg-db-host" class="input-control" placeholder="ej: aws-0-us-east-1.pooler.supabase.com">
+                        </div>
+                        <div style="display: flex; gap:10px;">
+                            <div class="form-group" style="flex:1;">
+                                <label>Base de Datos Name:</label>
+                                <input type="text" id="cfg-db-name" class="input-control" placeholder="postgres">
+                            </div>
+                            <div class="form-group" style="flex:1;">
+                                <label>Puerto (Port):</label>
+                                <input type="text" id="cfg-db-port" class="input-control" placeholder="5432" value="5432">
+                            </div>
+                        </div>
+                        <div style="display: flex; gap:10px;">
+                            <div class="form-group" style="flex:1;">
+                                <label>Usuario (User):</label>
+                                <input type="text" id="cfg-db-user" class="input-control" placeholder="postgres.tu_id">
+                            </div>
+                            <div class="form-group" style="flex:1;">
+                                <label>Contraseña (Password):</label>
+                                <input type="password" id="cfg-db-pass" class="input-control" placeholder="Tu Contraseña de la Nube">
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                             </div>
                         </div>
                     </div>
 
+<<<<<<< HEAD
                     <button style="background: #0dcaf0; color: black; border: none; padding: 10px 20px; border-radius: 4px; font-weight: bold; cursor: pointer; touch-action: manipulation; margin-top: 10px; font-size:14px;" onclick="guardarConfiguracionConexionMecanismo()">
                         💾 Guardar Cambios
+=======
+                    <button style="background: #0dcaf0; color: black; border: none; padding: 12px 25px; border-radius: 4px; font-weight: bold; cursor: pointer; touch-action: manipulation; margin-top: 10px;" onclick="guardarConfiguracionConexionMecanismo()">
+                        💾 Guardar y Aplicar Cambios
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                     </button>
                 </div>
             </div>
@@ -2178,6 +3018,10 @@ HTML_TEMPLATE = """
             const picker = new EmojiMart.Picker(pickerOptions);
             document.getElementById("emoji-mart-floating-picker").appendChild(picker);
             
+<<<<<<< HEAD
+=======
+            // === DETECCIÓN DE DISPOSITIVO ===
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
             function esCelular() {
                 return window.innerWidth <= 768 || 
                        /Android|iPhone|iPad|iPod|BlackBerry|Opera Mini|IEMobile/i.test(navigator.userAgent);
@@ -2217,7 +3061,11 @@ HTML_TEMPLATE = """
         function actualizarNombreSalaMobile(nombreSala) {
             const roomName = document.getElementById('mobile-room-name');
             if (roomName) {
+<<<<<<< HEAD
                 roomName.textContent = '💬 ' + (nombreSala || 'CORECHAT');
+=======
+                roomName.textContent = '💬 ' + (nombreSala || 'Chat');
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
             }
         }
 
@@ -2255,12 +3103,20 @@ HTML_TEMPLATE = """
             let genderGroup = document.getElementById("gender-group");
 
             if (isRegisterMode) {
+<<<<<<< HEAD
                 title.innerText = "💬 CORECHAT - Registro";
+=======
+                title.innerText = "Registrar Nueva Cuenta";
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                 btnLogin.innerText = "Completar Registro";
                 btnToggle.innerText = "¿Ya tenés cuenta? Iniciá sesión acá";
                 genderGroup.classList.remove("d-none");
             } else {
+<<<<<<< HEAD
                 title.innerText = "💬 CORECHAT";
+=======
+                title.innerText = "Iniciar Sesión";
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                 btnLogin.innerText = "Ingresar al Sistema";
                 btnToggle.innerText = "¿No tenés cuenta? Registrate acá";
                 genderGroup.classList.add("d-none");
@@ -2311,10 +3167,13 @@ HTML_TEMPLATE = """
                     
                     solicitarYRenderizarLobbySalas();
                 }
+<<<<<<< HEAD
             })
             .catch(err => {
                 alert("Error de conexión al servidor. Reintentando...");
                 console.error(err);
+=======
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
             });
         }
 
@@ -2340,10 +3199,13 @@ HTML_TEMPLATE = """
                     `;
                     grid.appendChild(card);
                 });
+<<<<<<< HEAD
             })
             .catch(err => {
                 console.error("Error cargando salas:", err);
                 alert("Error al cargar las salas. Reintentando...");
+=======
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
             });
         }
 
@@ -2351,9 +3213,12 @@ HTML_TEMPLATE = """
             if (socket && socket.connected) {
                 socket.emit('cambiar_sala', { sala: nombreSala });
                 actualizarNombreSalaMobile(nombreSala);
+<<<<<<< HEAD
             } else {
                 alert("No estás conectado al servidor. Reintentando...");
                 if (socket) socket.connect();
+=======
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
             }
         }
 
@@ -2388,7 +3253,11 @@ HTML_TEMPLATE = """
             });
             
             socket.on('connect', function() {
+<<<<<<< HEAD
                 console.log('✅ Conectado al servidor CORECHAT');
+=======
+                console.log('✅ Conectado al servidor Socket.IO');
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                 socket.emit('join_chat', { username: currentUser });
             });
 
@@ -2404,7 +3273,11 @@ HTML_TEMPLATE = """
             });
 
             socket.on('reconnect', function() {
+<<<<<<< HEAD
                 console.log('✅ Reconectado al servidor CORECHAT.');
+=======
+                console.log('✅ Reconectado al servidor.');
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                 socket.emit('join_chat', { username: currentUser });
                 if (currentSalaName) {
                     socket.emit('cambiar_sala', { sala: currentSalaName });
@@ -2560,6 +3433,7 @@ HTML_TEMPLATE = """
         function renderizarListaUsuariosConectados(list) {
             let div = document.getElementById("lista-usuarios"); div.innerHTML = "";
             list.forEach(u => {
+<<<<<<< HEAD
                 let row = document.createElement("div"); row.style.display = "flex"; row.style.alignItems = "center"; row.style.margin = "8px 0";
                 let dot = document.createElement("span"); dot.className = "status-dot dot-green"; row.appendChild(dot);
 
@@ -2570,11 +3444,27 @@ HTML_TEMPLATE = """
                     let col = u.genero === 'mujer' ? '#e91e63' : '#0d6efd';
                     let ini = u.username.substring(0,2).toUpperCase();
                     av.innerHTML = `<span class="msg-avatar-initials" style="width:22px; height:22px; font-size:8px; background:${col}; margin:0;">${ini}</span>`;
+=======
+                let row = document.createElement("div"); row.style.display = "flex"; row.style.alignItems = "center"; row.style.margin = "10px 0";
+                let dot = document.createElement("span"); dot.className = "status-dot dot-green"; row.appendChild(dot);
+
+                let av = document.createElement("div"); av.style.marginRight = "8px";
+                if (u.avatar) {
+                    av.innerHTML = `<img src="${u.avatar}" class="msg-avatar-img" style="width:26px; height:26px; margin:0;">`;
+                } else {
+                    let col = u.genero === 'mujer' ? '#e91e63' : '#0d6efd';
+                    let ini = u.username.substring(0,2).toUpperCase();
+                    av.innerHTML = `<span class="msg-avatar-initials" style="width:26px; height:26px; font-size:9px; background:${col}; margin:0;">${ini}</span>`;
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                 }
                 row.appendChild(av);
 
                 let nameSpan = document.createElement("span");
+<<<<<<< HEAD
                 nameSpan.className = "clickable-nick"; nameSpan.style.fontSize = "13px"; nameSpan.style.fontWeight = "bold";
+=======
+                nameSpan.className = "clickable-nick"; nameSpan.style.fontSize = "14px"; nameSpan.style.fontWeight = "bold";
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                 if (u.rol === 'admin') nameSpan.style.color = '#ffc107';
                 else if (u.rol === 'mod') nameSpan.style.color = '#0dcaf0';
                 else nameSpan.style.color = '#eee';
@@ -2658,9 +3548,13 @@ HTML_TEMPLATE = """
             e.preventDefault(); targetMenuUsername = targetUser;
             let menu = document.getElementById("custom-context-menu");
             document.getElementById("context-option-mute").innerText = localMutedUsernames.has(targetUser) ? `Quitar silencio a @${targetUser}` : `Silenciar localmente a @${targetUser}`;
+<<<<<<< HEAD
             menu.style.left = Math.min(e.clientX, window.innerWidth - 180) + "px"; 
             menu.style.top = Math.min(e.clientY, window.innerHeight - 100) + "px"; 
             menu.style.display = "block";
+=======
+            menu.style.left = e.clientX + "px"; menu.style.top = e.clientY + "px"; menu.style.display = "block";
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
         }
 
         function ejecutarMuteLocal() {
@@ -2681,8 +3575,11 @@ HTML_TEMPLATE = """
             let rightOffset = 310 + (total * 340);
             if (window.innerWidth <= 768) {
                 rightOffset = 10 + (total * 10);
+<<<<<<< HEAD
                 win.style.left = "3%";
                 win.style.right = "3%";
+=======
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
             }
             win.style.right = rightOffset + "px";
             
@@ -2760,7 +3657,11 @@ HTML_TEMPLATE = """
                 previewImg.onerror = function() {
                     previewImg.style.display = 'none';
                     previewText.style.display = 'block';
+<<<<<<< HEAD
                     previewText.textContent = '❌ URL inválida';
+=======
+                    previewText.textContent = '❌ La URL no es válida o la imagen no se pudo cargar';
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                     previewText.style.color = '#dc3545';
                 };
                 previewImg.onload = function() {
@@ -2770,7 +3671,11 @@ HTML_TEMPLATE = """
             } else {
                 previewImg.style.display = 'none';
                 previewText.style.display = 'block';
+<<<<<<< HEAD
                 previewText.textContent = 'Pegá una URL para previsualizar';
+=======
+                previewText.textContent = 'Pegá una URL para ver la previsualización';
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                 previewText.style.color = '#666';
             }
         }
@@ -2894,35 +3799,57 @@ HTML_TEMPLATE = """
                                 <td><span class="badge">${u.estado}</span></td>
                                 <td>${u.genero}</td>
                                 <td>
+<<<<<<< HEAD
                                     <button class="btn-sm" style="background:#198754; color:white; margin-bottom: 4px;" onclick="guardarCambiosCredencialesAdmin(${u.id})">💾 Guardar</button>
                                     <button class="btn-sm" style="background:#212529; color:#ffc107;" onclick="eliminarUsuarioAdmin('${u.username}')" ${buttonsDisabled}>Eliminar</button>
                                     <hr style="border: 0; border-top: 1px solid #333; margin: 4px 0;">
                                     <div class="admin-action-container">
                                         <select id="time-silenciar-${u.id}" class="admin-time-select" ${buttonsDisabled}>
                                             <option value="10">10 Min</option><option value="30">30 Min</option><option value="60">1 Hora</option><option value="perm">Perm</option>
+=======
+                                    <button class="btn-sm" style="background:#198754; color:white; margin-bottom: 5px;" onclick="guardarCambiosCredencialesAdmin(${u.id})">💾 Guardar</button>
+                                    <button class="btn-sm" style="background:#212529; color:#ffc107;" onclick="eliminarUsuarioAdmin('${u.username}')" ${buttonsDisabled}>Eliminar</button>
+                                    <hr style="border: 0; border-top: 1px solid #333; margin: 6px 0;">
+                                    <div class="admin-action-container">
+                                        <select id="time-silenciar-${u.id}" class="admin-time-select" ${buttonsDisabled}>
+                                            <option value="10">10 Minutos</option><option value="30">30 Minutos</option><option value="60">1 Hora</option><option value="perm">Permanente</option>
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                                         </select>
                                         <button class="btn-sm" style="background:#ffc107; color:black;" onclick="ejecutarAccionTemporal('${u.username}', 'silenciar', ${u.id})" ${buttonsDisabled}>Silenciar</button>
                                     </div>
                                     <div class="admin-action-container">
                                         <select id="time-ban-${u.id}" class="admin-time-select" ${buttonsDisabled}>
+<<<<<<< HEAD
                                             <option value="10">10 Min</option><option value="30">30 Min</option><option value="60">1 Hora</option><option value="perm" selected>Perm</option>
+=======
+                                            <option value="10">10 Minutos</option><option value="30">30 Minutos</option><option value="60">1 Hora</option><option value="perm" selected>Permanente</option>
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                                         </select>
                                         <button class="btn-sm" style="background:#dc3545; color:white;" onclick="ejecutarAccionTemporal('${u.username}', 'ban', ${u.id})" ${buttonsDisabled}>Banear</button>
                                     </div>
                                     <div class="admin-action-container">
                                         <select id="time-patear-${u.id}" class="admin-time-select" ${buttonsDisabled}>
+<<<<<<< HEAD
                                             <option value="10">10 Min</option><option value="30">30 Min</option><option value="60">1 Hora</option><option value="perm">Perm</option>
                                         </select>
                                         <button class="btn-sm" style="background:#6f42c1; color:white;" onclick="ejecutarPatearSalaTemporal('${u.username}', ${u.id})" ${buttonsDisabled}>Patear</button>
+=======
+                                            <option value="10">10 Minutos</option><option value="30">30 Minutos</option><option value="60">1 Hora</option><option value="perm">Permanente</option>
+                                        </select>
+                                        <button class="btn-sm" style="background:#6f42c1; color:white;" onclick="ejecutarPatearSalaTemporal('${u.username}', ${u.id})" ${buttonsDisabled}>Patear de Sala</button>
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                                     </div>
                                 </td>
                             `;
                             tbody.appendChild(tr);
                         });
                     }
+<<<<<<< HEAD
                 })
                 .catch(err => {
                     console.error("Error cargando usuarios:", err);
+=======
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                 });
         }
 
@@ -2963,7 +3890,11 @@ HTML_TEMPLATE = """
         function actualizarBotonVisibilidadInterfaz(estadoVisible) {
             let btn = document.getElementById("btn-toggle-visibilidad");
             if(btn) {
+<<<<<<< HEAD
                 btn.innerText = estadoVisible ? "🔘 Ocultarse (Invisible)" : "🟢 Dejarse ver en el Chat";
+=======
+                btn.innerText = estadoVisible ? "🔘 Ocultarse (Modo Invisible)" : "🟢 Dejarse ver en el Chat";
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                 btn.style.background = estadoVisible ? "#dc3545" : "#198754";
             }
         }
@@ -3022,7 +3953,11 @@ HTML_TEMPLATE = """
                 if(data) {
                     data.forEach(s => {
                         let tr = document.createElement("tr");
+<<<<<<< HEAD
                         tr.innerHTML = `<td>${s.id}</td><td>${s.nombre}</td><td>${s.tipo}</td><td><img src="${s.url}" class="admin-sticker-preview"></td><td style="font-size:10px; max-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.url}</td><td><button class="btn-sm" style="background:#dc3545; color:white; touch-action: manipulation;" onclick="eliminarStickerAdmin(${s.id})">Quitar</button></td>`;
+=======
+                        tr.innerHTML = `<td>${s.id}</td><td>${s.nombre}</td><td>${s.tipo}</td><td><img src="${s.url}" class="admin-sticker-preview"></td><td style="font-size:11px; max-width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${s.url}</td><td><button class="btn-sm" style="background:#dc3545; color:white; touch-action: manipulation;" onclick="eliminarStickerAdmin(${s.id})">Quitar</button></td>`;
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
                         tbody.appendChild(tr);
                     });
                 }
@@ -3113,9 +4048,12 @@ HTML_TEMPLATE = """
             if (!e.target.closest("#media-floating-modal") && !e.target.closest("button[onclick^='toggleMediaModal']")) {
                 document.getElementById("media-floating-modal").style.display = "none";
             }
+<<<<<<< HEAD
             if (!e.target.closest("#profile-dropdown") && !e.target.closest("#profile-trigger")) {
                 document.getElementById("profile-dropdown").style.display = "none";
             }
+=======
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
         });
     </script>
 </body>
@@ -3123,5 +4061,9 @@ HTML_TEMPLATE = """
 """
 
 if __name__ == '__main__':
+<<<<<<< HEAD
+=======
+    # Puerto para Hugging Face Spaces (usa 7860 por defecto)
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
     port = int(os.environ.get('PORT', 7860))
     socketio.run(app, host='0.0.0.0', port=port, debug=True)

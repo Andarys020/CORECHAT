@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 __pycache__/
 *.py[cod]
 *.so
@@ -43,3 +44,14 @@ Thumbs.db
 *.bak
 *.tmp
 *.temp
+=======
+*.pyc
+__pycache__/
+*.db
+db_config.json
+.env
+*.log
+.DS_Store
+.venv/
+venv/
+>>>>>>> 24f7449b8031a198d335047b14c3df39f734c939
