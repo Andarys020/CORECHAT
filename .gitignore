@@ -1,39 +1,9 @@
-# Python
 *.pyc
 __pycache__/
-*.pyo
-*.pyd
-.Python
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Base de datos
 *.db
-*.sqlite
-*.sqlite3
 db_config.json
-
-# Variables de entorno
 .env
-.env.local
-.env.*.local
-
-# Logs
 *.log
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Sistema operativo
 .DS_Store
-Thumbs.db
-
-# Render
 .venv/
+venv/

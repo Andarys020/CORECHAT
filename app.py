@@ -20,33 +20,21 @@ app.config['SECRET_KEY'] = 'secreto123!'
 # ✅ Aumentar límite de tamaño de solicitud
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10 MB
 
-# === CONFIGURACIÓN MEJORADA PARA RENDER Y PYTHON 3.14.3 ===
-if 'GUNICORN_CMD_ARGS' in os.environ or 'RENDER' in os.environ:
-    socketio = SocketIO(
-        app,
-        cors_allowed_origins="*",
-        async_mode='gevent',
-        logger=False,
-        engineio_logger=False,
-        ping_timeout=60,
-        ping_interval=25,
-        transports=['websocket', 'polling'],
-        allow_upgrades=True,
-        always_connect=True,
-        max_http_buffer_size=10 * 1024 * 1024
-    )
-else:
-    socketio = SocketIO(
-        app,
-        cors_allowed_origins="*",
-        async_mode='threading',
-        ping_timeout=60,
-        ping_interval=25,
-        transports=['websocket', 'polling'],
-        allow_upgrades=True,
-        always_connect=True,
-        max_http_buffer_size=10 * 1024 * 1024
-    )
+# === CONFIGURACIÓN PARA HUGGING FACE ===
+# En Hugging Face Spaces, usamos gevent con el worker adecuado
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",
+    async_mode='gevent',
+    logger=False,
+    engineio_logger=False,
+    ping_timeout=60,
+    ping_interval=25,
+    transports=['websocket', 'polling'],
+    allow_upgrades=True,
+    always_connect=True,
+    max_http_buffer_size=10 * 1024 * 1024
+)
 
 # Variable global en memoria para controlar si el admin decide hacerse visible
 admin_visible = False
@@ -731,7 +719,7 @@ def broadcast_user_list_all_rooms():
         socketio.emit('update_users', lista_sala, to=sala)
 
 # ==========================================
-# 4. PLANTILLA HTML (COMPLETA CON FUNCIONES PARA CELULAR)
+# 4. PLANTILLA HTML (COMPLETA CON TODAS LAS FUNCIONES)
 # ==========================================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -878,7 +866,6 @@ HTML_TEMPLATE = """
 
         /* === ADAPTACIÓN PARA CELULAR === */
         @media only screen and (max-width: 768px) {
-            /* Header móvil fijo */
             #mobile-header {
                 display: block !important;
                 background: #1e1e1e;
@@ -940,7 +927,6 @@ HTML_TEMPLATE = """
                 border: none;
             }
             
-            /* Ajuste del chat para el header fijo */
             #chat-section {
                 padding-top: 65px !important;
             }
@@ -949,7 +935,6 @@ HTML_TEMPLATE = """
                 padding-top: 10px !important;
             }
             
-            /* Panel de usuarios abajo en móvil */
             .side-users {
                 width: 100% !important;
                 height: 200px !important;
@@ -969,7 +954,6 @@ HTML_TEMPLATE = """
                 padding: 10px !important;
             }
             
-            /* Botones más grandes para tocar */
             .btn-block, .btn-sm, .btn-visibilidad {
                 font-size: 16px !important;
                 padding: 14px 20px !important;
@@ -982,7 +966,6 @@ HTML_TEMPLATE = """
                 min-height: 48px !important;
             }
             
-            /* Mensajes más legibles */
             .chat-msg-line {
                 font-size: 15px !important;
                 margin: 8px 0 !important;
@@ -1000,7 +983,6 @@ HTML_TEMPLATE = """
                 max-height: 100px !important;
             }
             
-            /* Header del chat más compacto */
             .chat-header-container {
                 flex-wrap: wrap !important;
                 gap: 6px !important;
@@ -1017,7 +999,6 @@ HTML_TEMPLATE = """
                 min-height: 38px !important;
             }
             
-            /* Controles de mensaje más grandes */
             .controls-row button {
                 font-size: 20px !important;
                 padding: 0 16px !important;
@@ -1037,7 +1018,6 @@ HTML_TEMPLATE = """
                 min-height: 48px !important;
             }
             
-            /* Ventana de chat privado */
             .private-chat-window {
                 width: 92% !important;
                 max-width: 360px !important;
@@ -1062,7 +1042,6 @@ HTML_TEMPLATE = """
                 font-size: 14px !important;
             }
             
-            /* Modal de avatar */
             .avatar-upload-modal {
                 width: 92% !important;
                 max-width: 380px !important;
@@ -1077,7 +1056,6 @@ HTML_TEMPLATE = """
                 font-size: 16px !important;
             }
             
-            /* Grid de salas en 2 columnas */
             .salas-grid {
                 grid-template-columns: repeat(2, 1fr) !important;
                 gap: 10px !important;
@@ -1104,7 +1082,6 @@ HTML_TEMPLATE = """
                 font-size: 11px !important;
             }
             
-            /* Tablas con scroll horizontal */
             .table-responsive {
                 overflow-x: auto !important;
                 -webkit-overflow-scrolling: touch !important;
@@ -1141,7 +1118,6 @@ HTML_TEMPLATE = """
                 min-height: 30px !important;
             }
             
-            /* Ajustes generales de texto */
             body, p, span, div, input, button, select, label {
                 font-size: 15px !important;
             }
@@ -1176,7 +1152,6 @@ HTML_TEMPLATE = """
                 min-height: 44px !important;
             }
             
-            /* Admin panel */
             #admin-section {
                 padding: 10px !important;
             }
@@ -1232,7 +1207,6 @@ HTML_TEMPLATE = """
                 min-height: 48px !important;
             }
             
-            /* DB config */
             .form-db-config {
                 padding: 15px !important;
             }
@@ -1244,12 +1218,10 @@ HTML_TEMPLATE = """
                 gap: 8px !important;
             }
             
-            /* Botón de toggle de panel */
             #toggle-panel-btn {
                 display: none !important;
             }
             
-            /* Media modal en móvil */
             .media-modal {
                 left: 50% !important;
                 transform: translateX(-50%) !important;
@@ -1265,7 +1237,6 @@ HTML_TEMPLATE = """
                 bottom: 70px !important;
             }
             
-            /* Context menu en móvil */
             .custom-context-menu {
                 min-width: 200px !important;
             }
@@ -2198,7 +2169,6 @@ HTML_TEMPLATE = """
             let win = document.createElement("div"); win.id = `private-win-${targetUser}`; win.className = "private-chat-window";
             let total = document.querySelectorAll(".private-chat-window").length;
             let rightOffset = 310 + (total * 340);
-            // En móvil, ajustar posición
             if (window.innerWidth <= 768) {
                 rightOffset = 10 + (total * 10);
             }
@@ -2635,6 +2605,6 @@ HTML_TEMPLATE = """
 """
 
 if __name__ == '__main__':
-    # Puerto para Render (usar variable de entorno)
-    port = int(os.environ.get('PORT', 8550))
+    # Puerto para Hugging Face Spaces (usa 7860 por defecto)
+    port = int(os.environ.get('PORT', 7860))
     socketio.run(app, host='0.0.0.0', port=port, debug=True)
